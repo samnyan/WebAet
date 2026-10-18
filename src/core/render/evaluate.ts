@@ -1,6 +1,6 @@
 import type { Layer, Scene, Video } from '../aet/types'
 import { identity, multiply, sampleCurve, type Matrix } from '../animation/curves'
-export interface DrawItem { layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; sourceId?: number; blend: number; matte: number }
+export interface DrawItem { layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; sourceId?: number; blend: number; matte: number; mask?: DrawItem }
 export interface Evaluation { items: DrawItem[]; warnings: string[] }
 export function layerMatrix(layer: Layer, frame: number): Matrix {
   if (!layer.video) return identity()
@@ -22,21 +22,29 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       const p = comp.layers.find(x => x.offset === l.parent); if (!p) return identity()
       seen.add(p.offset); return multiply(parentMatrix(p, seen), layerMatrix(p, time))
     }
+    let pendingMatte: DrawItem | undefined
     for (const l of [...comp.layers].reverse()) {
       if (isolated !== null && path.length === 0 && l.offset !== isolated) continue
-      if (hidden.has(l.offset) || !(l.flags & 1) || time < l.start || time >= l.end) continue
+      if (hidden.has(l.offset) || (!(l.flags & 1) && !pendingMatte) || time < l.start || time >= l.end) continue
       if (l.video?.extra) warnings.add('3D layers shown using their 2D transform; camera/perspective not applied')
-      if (l.video?.matte) warnings.add('Track matte is preserved but not rendered')
       if (l.itemType === 2) { warnings.add('Audio playback is not supported'); continue }
       const matrix = multiply(multiply(base, parentMatrix(l)), layerMatrix(l, time))
       const opacity = alpha * (l.video ? Math.max(0, Math.min(1, sampleCurve(l.video.curves.opacity, time))) : 1)
       const local = (time - l.start) * l.timeScale + l.timeOffset, currentPath = [...path, l.offset]
-      if (l.itemType === 3) { walk(l.item, local, matrix, opacity, currentPath, next); continue }
+      if (l.itemType === 3) {
+        if (pendingMatte || l.video?.matte) { warnings.add('Composition-spanning track mattes are not supported'); pendingMatte = undefined }
+        walk(l.item, local, matrix, opacity, currentPath, next); continue
+      }
       const video = scene.videos.find(v => v.offset === l.item)
-      if (!video || opacity <= 0) continue
+      if (!video || (opacity <= 0 && !pendingMatte && !l.video?.matte)) continue
       const source = video.sources[Math.max(0, Math.min(video.sources.length - 1, Math.floor(local * video.frames)))]
-      items.push({ layer: l, path: currentPath, matrix, opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 })
+      const item: DrawItem = { layer: l, path: currentPath, matrix, opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
+      // Runtime draws back-to-front: a matte-tagged source is retained, then masked by the next sprite.
+      if (pendingMatte) { pendingMatte.mask = item; items.push(pendingMatte); pendingMatte = undefined }
+      else if (item.matte) pendingMatte = item
+      else items.push(item)
     }
+    if (pendingMatte) warnings.add(`Unpaired track matte: ${pendingMatte.layer.name}`)
   }
   walk(composition, frame, identity(), 1, [], new Set())
   return { items, warnings: [...warnings] }

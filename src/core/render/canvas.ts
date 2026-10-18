@@ -6,6 +6,22 @@ export interface HitArea { item: DrawItem; points: { x: number; y: number }[] }
 export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], library: SpriteLibrary, selected: number | null, wireframe: boolean): { hits: HitArea[]; warnings: string[] } {
   const hits: HitArea[] = [], warnings = new Set<string>()
   for (const item of items) {
+    if (item.mask && !wireframe) {
+      // Composite in backing-store coordinates so zoom, pan and device scale match the stage.
+      const source = document.createElement('canvas'), mask = document.createElement('canvas')
+      source.width = mask.width = ctx.canvas.width; source.height = mask.height = ctx.canvas.height
+      const s = source.getContext('2d')!, m = mask.getContext('2d')!, transform = ctx.getTransform()
+      s.setTransform(transform); m.setTransform(transform)
+      const plain = { ...item, mask: undefined, blend: 3 }
+      const drawn = drawItems(s, [plain], library, selected, false)
+      const masked = drawItems(m, [{ ...item.mask, blend: 3 }], library, null, false)
+      for (const warning of [...drawn.warnings, ...masked.warnings]) warnings.add(warning)
+      if (item.matte !== 1) warnings.add(`Track matte mode ${item.matte} uses alpha preview (inversion/luma not applied)`)
+      s.resetTransform(); s.globalCompositeOperation = 'destination-in'; s.drawImage(mask, 0, 0)
+      ctx.save(); ctx.resetTransform(); ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'; ctx.drawImage(source, 0, 0); ctx.restore()
+      hits.push(...drawn.hits)
+      continue
+    }
     const entry = library.find(item.sourceName, item.sourceId), w = entry?.sprite.width ?? item.video.width, h = entry?.sprite.height ?? item.video.height
     ctx.save(); ctx.transform(...item.matrix); ctx.globalAlpha *= item.opacity
     ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'

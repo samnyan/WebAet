@@ -46,7 +46,8 @@ Verified on supplied MegaMix resources:
 
 Not complete game-runtime parity:
 - 3D records/camera curves are preserved, but preview only applies 2D transforms; no perspective/camera rendering.
-- Track mattes are preserved but not rendered. Unsupported blend modes use normal preview with diagnostics.
+- Sprite-to-sprite alpha Track Matte is previewed with offscreen Canvas2D compositing, following ReDIVA's back-to-front pairing (including inactive mask layers). Browser check: real `aet_gam_cmn.bin` composition 26 paired `gam_cmn_suc_eff01__n.pic` with `gam_cmn_suc_eff02__n.pic`; controlled rectangle geometry using that pair yielded alpha samples `[0, 255, 0]`. This checks pairing and compositing, not visual parity of the original textured effect.
+- Inverted/luma mattes currently use alpha fallback with diagnostics; composition-spanning mattes are unsupported. Unsupported blend modes use normal preview with diagnostics.
 - No audio playback, structural layer/scene creation, archive repacking or sprite editing/export.
 - English translation infrastructure is installed, but the complete editor interface is not yet translated.
 - No game-runtime playback verification has been performed. Independent binary readability is not proof of identical game rendering.
