@@ -4,13 +4,20 @@ import { NButton, NCheckbox, NInputNumber, NSelect } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import { channels, channels3D, videoCurve, type EditableChannel, type Curve } from '../../core/aet/types'
 import { sampleCurve } from '../../core/animation/curves'
+import { markerSegments } from '../../core/animation/segments'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const collapsed = ref(false), playing = ref(false), repeat = ref(true), channel = ref<EditableChannel>('positionX'), selectedKey = ref(-1), pixels = ref(3), height = ref(245)
 let raf = 0, last = 0
-const range = computed(() => {
+const segmentId = ref('all')
+const segments = computed(() => { e.version.value; return markerSegments(e.selected.value?.markers ?? []) })
+const segmentOptions = computed(() => [{ value: 'all', label: '完整时间范围' }, ...segments.value.map(s => ({ value: s.id, label: s.label }))])
+const fullRange = computed(() => {
   const layers = e.composition.value?.layers ?? []
   return { start: Math.min(e.scene.value?.start ?? 0, ...layers.map(l => l.start)), end: Math.max(e.scene.value?.end ?? 60, ...layers.map(l => l.end), 1) }
 })
+const range = computed(() => segments.value.find(s => s.id === segmentId.value) ?? fullRange.value)
+watch(() => e.selectedId.value, () => { segmentId.value = 'all'; stop() })
+watch(segmentId, () => { stop(); e.frame.value = range.value.start })
 const width = computed(() => Math.max(700, (range.value.end - range.value.start) * pixels.value))
 const curve = computed(() => { e.version.value; return videoCurve(e.selected.value?.video, channel.value) })
 const key = computed(() => curve.value?.keys[selectedKey.value])
@@ -36,7 +43,7 @@ function addKey() {
   const c = curve.value; if (!c || (e.selected.value!.flags & 32)) return
   const frame = Math.round(e.frame.value), value = sampleCurve(c, frame)
   e.edit(() => {
-    if (c.keys.length === 1 && frame !== range.value.start) c.keys[0]!.frame = range.value.start
+    if (c.keys.length === 1 && frame !== fullRange.value.start) c.keys[0]!.frame = fullRange.value.start
     const found = c.keys.findIndex(k => k.frame === frame)
     if (found >= 0) { selectedKey.value = found; return }
     c.keys.push({ frame, value, tangent: 0 }); c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.findIndex(k => k.frame === frame)
@@ -75,6 +82,7 @@ onBeforeUnmount(stop)
       <n-button data-testid="play" size="tiny" :disabled="!e.doc.value" @click="toggle">{{ playing ? '暂停' : '播放' }}</n-button><n-button size="tiny" @click="scrub(range.start)">|◀</n-button>
       <n-input-number class="frame-input" size="tiny" :value="e.frame.value" :min="range.start" :max="range.end" :precision="2" :show-button="false" @update:value="v => v !== null && scrub(v)" /><span>f</span><n-checkbox v-model:checked="repeat" size="small">循环</n-checkbox>
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
+      <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="!segments.length" />
       <div class="spacer" /><n-button size="tiny" @click="pixels = Math.max(0.2, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
     </template></div>
     <template v-if="!collapsed"><div class="timeline-body"><div class="track-labels"><div class="track-ruler-label">属性</div><div v-for="track in tracks" :key="track.channel" class="track-label" :class="{ active: channel === track.channel }" @click="channel = track.channel">{{ track.channel }} <small>{{ track.curve?.keys.length ?? 0 }}</small></div></div>
