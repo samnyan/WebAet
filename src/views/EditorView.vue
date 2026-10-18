@@ -20,7 +20,7 @@ async function pickDirectory() {
     async function walk(dir: FileSystemDirectoryHandle) {
       for await (const handle of (dir as unknown as { values: () => AsyncIterable<FileSystemHandle> }).values()) {
         if (handle.kind === 'directory') await walk(handle as FileSystemDirectoryHandle)
-        else if (/^(aet_|spr_).*\.(bin|farc)$/i.test(handle.name) && !/^(aet|spr)_db/i.test(handle.name)) files.push(await (handle as FileSystemFileHandle).getFile())
+        else if (/^(aet_|spr_).*\.(bin|farc)$/i.test(handle.name) && !/^aet_db/i.test(handle.name)) files.push(await (handle as FileSystemFileHandle).getFile())
       }
     }
     e.busy.value = true; await walk(root); await e.importFiles(files)

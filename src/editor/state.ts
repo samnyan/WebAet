@@ -5,6 +5,7 @@ import type { AetDocument, Channel, Scene } from '../core/aet/types'
 import { SpriteLibrary } from '../core/resources/library'
 import { unpackFarc } from '../core/resources/farc'
 import { parseSpriteSet } from '../core/resources/sprites'
+import { parseSpriteDatabase } from '../core/resources/database'
 import { sampleCurve } from '../core/animation/curves'
 
 export function createEditor() {
@@ -49,6 +50,7 @@ export function createEditor() {
           const entries = /\.farc$/i.test(file.name) ? unpackFarc(bytes) : new Map([[file.name, bytes]])
           for (const [name, data] of entries) {
             if (/^aet_.*\.bin$/i.test(name) && !/^aet_db/i.test(name)) incoming.push({ name, bytes: data })
+            else if (/^spr_db\.bin$/i.test(name)) { library.bindDatabase(parseSpriteDatabase(data)); resourceVersion.value++ }
             else if (/^spr_.*\.bin$/i.test(name) && !/^spr_db/i.test(name)) { library.add(parseSpriteSet(data, name)); resourceVersion.value++ }
           }
         } catch (e) { notices.value.push(`${file.name}: ${e}`) }
@@ -65,6 +67,17 @@ export function createEditor() {
       const curve = l.video!.curves[channel]
       if (curve.keys.length <= 1) curve.keys = [{ frame: 0, value, tangent: 0 }]
       else { const found = curve.keys.find(k => Math.abs(k.frame - frame.value) < 0.0001); if (found) found.value = value; else curve.keys.push({ frame: frame.value, value, tangent: 0 }); curve.keys.sort((a, b) => a.frame - b.frame) }
+    })
+  }
+  function translateLayer(id: number, dx: number, dy: number) {
+    const l = composition.value?.layers.find(l => l.offset === id)
+    if (!l?.video || (l.flags & 32)) return
+    edit(() => {
+      for (const [ch, delta] of [['positionX', dx], ['positionY', dy]] as const) {
+        const c = l.video!.curves[ch]
+        if (!c.keys.length) c.keys = [{ frame: 0, value: delta, tangent: 0 }]
+        else for (const key of c.keys) key.value += delta
+      }
     })
   }
   function currentValue(channel: Channel) { return sampleCurve(selected.value?.video?.curves[channel], frame.value) }
@@ -87,7 +100,7 @@ export function createEditor() {
     if (scene.value?.compositions.some(c => c.offset === project.view?.compositionId)) compositionId.value = project.view.compositionId
     frame.value = project.view?.frame ?? scene.value?.start ?? 0; refresh()
   }
-  return { doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, exportBinary, saveProject,
+  return { doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, translateLayer, exportBinary, saveProject,
     canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }) }
 }
 export type Editor = ReturnType<typeof createEditor>

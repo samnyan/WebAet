@@ -1,6 +1,6 @@
 import type { Layer, Scene, Video } from '../aet/types'
 import { identity, multiply, sampleCurve, type Matrix } from '../animation/curves'
-export interface DrawItem { layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; blend: number; matte: number }
+export interface DrawItem { layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; sourceId?: number; blend: number; matte: number }
 export interface Evaluation { items: DrawItem[]; warnings: string[] }
 export function layerMatrix(layer: Layer, frame: number): Matrix {
   if (!layer.video) return identity()
@@ -10,7 +10,7 @@ export function layerMatrix(layer: Layer, frame: number): Matrix {
   m[4] -= m[0] * s('anchorX') + m[2] * s('anchorY'); m[5] -= m[1] * s('anchorX') + m[3] * s('anchorY')
   return m
 }
-export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set()): Evaluation {
+export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null): Evaluation {
   const items: DrawItem[] = [], warnings = new Set<string>()
   const walk = (id: number, time: number, base: Matrix, alpha: number, path: number[], ancestors: Set<number>) => {
     if (ancestors.has(id)) { warnings.add('Composition cycle omitted'); return }
@@ -23,6 +23,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       seen.add(p.offset); return multiply(parentMatrix(p, seen), layerMatrix(p, time))
     }
     for (const l of [...comp.layers].reverse()) {
+      if (isolated !== null && path.length === 0 && l.offset !== isolated) continue
       if (hidden.has(l.offset) || !(l.flags & 1) || time < l.start || time >= l.end) continue
       if (l.video?.extra) warnings.add('3D layers shown using their 2D transform; camera/perspective not applied')
       if (l.video?.matte) warnings.add('Track matte is preserved but not rendered')
@@ -34,7 +35,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       const video = scene.videos.find(v => v.offset === l.item)
       if (!video || opacity <= 0) continue
       const source = video.sources[Math.max(0, Math.min(video.sources.length - 1, Math.floor(local * video.frames)))]
-      items.push({ layer: l, path: currentPath, matrix, opacity, video, sourceName: source?.name ?? '', blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 })
+      items.push({ layer: l, path: currentPath, matrix, opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 })
     }
   }
   walk(composition, frame, identity(), 1, [], new Set())

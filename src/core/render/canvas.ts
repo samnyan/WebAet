@@ -6,7 +6,7 @@ export interface HitArea { item: DrawItem; points: { x: number; y: number }[] }
 export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], library: SpriteLibrary, selected: number | null, wireframe: boolean): { hits: HitArea[]; warnings: string[] } {
   const hits: HitArea[] = [], warnings = new Set<string>()
   for (const item of items) {
-    const entry = library.find(item.sourceName), w = entry?.sprite.width ?? item.video.width, h = entry?.sprite.height ?? item.video.height
+    const entry = library.find(item.sourceName, item.sourceId), w = entry?.sprite.width ?? item.video.width, h = entry?.sprite.height ?? item.video.height
     ctx.save(); ctx.transform(...item.matrix); ctx.globalAlpha *= item.opacity
     ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'
     if (!(item.blend in blends)) warnings.add(`Blend mode ${item.blend} uses normal preview`)
