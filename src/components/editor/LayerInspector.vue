@@ -1,0 +1,34 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { NInput, NInputNumber, NCheckbox, NSelect, NButton } from 'naive-ui'
+import { channels } from '../../core/aet/types'
+import type { Editor } from '../../editor/state'
+const { editor: e } = defineProps<{ editor: Editor }>()
+const layer = computed(() => { e.version.value; return e.selected.value })
+const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
+function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) { if (value === null || !layer.value) return; e.edit(() => { layer.value![key] = value }) }
+const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' }, { value: 6, label: 'Multiply' }, { value: 7, label: 'Screen' }, { value: 8, label: 'Overlay' }, { value: 27, label: 'Difference' }]
+</script>
+<template>
+  <section class="panel inspector">
+    <header>属性 / Inspector</header>
+    <div v-if="layer" class="property-scroll" :key="layer.offset">
+      <label class="field"><span>名称</span><n-input size="tiny" :value="layer.name" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.name = v)" /></label>
+      <div class="property-group"><b>图层</b><code>0x{{ layer.offset.toString(16) }}</code>
+        <label class="field"><span>可见</span><n-checkbox :checked="!!(layer.flags & 1)" @update:checked="v => e.edit(() => layer!.flags = v ? layer!.flags | 1 : layer!.flags & ~1)" /></label>
+        <label class="field"><span>锁定</span><n-checkbox :checked="!!(layer.flags & 32)" @update:checked="v => e.edit(() => layer!.flags = v ? layer!.flags | 32 : layer!.flags & ~32)" /></label>
+        <label v-for="key in (['start', 'end', 'timeOffset', 'timeScale'] as const)" :key="key" class="field"><span>{{ key }}</span><n-input-number size="tiny" :value="layer[key]" :disabled="!!(layer.flags & 32)" :show-button="false" @update:value="numeric(key, $event)" /></label>
+        <p v-if="layer.parent">Parent: 0x{{ layer.parent.toString(16) }}</p>
+        <n-button v-if="layer.itemType === 3" size="tiny" @click="e.compositionId.value = layer.item; e.selectedId.value = null">进入合成 ↳</n-button>
+      </div>
+      <div v-if="layer.video" class="property-group"><b>变换 · {{ e.frame.value.toFixed(1) }} f</b>
+        <label v-for="ch in channels" :key="ch" class="field" :data-channel="ch"><span :title="ch">{{ labels[ch] }} <small v-if="layer.video.curves[ch].keys.length > 1">◆</small></span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'opacity' || ch.startsWith('scale') ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
+        <label class="field"><span>混合</span><n-select size="tiny" :value="layer.video.blend" :options="blendOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.blend = v)" /></label>
+        <p v-if="layer.video.extra" class="warning">3D 参数保留；当前画布使用 2D 投影。</p>
+        <p v-if="layer.video.matte" class="warning">Track matte {{ layer.video.matte }}：保留但尚未渲染。</p>
+      </div>
+      <div v-if="layer.markers.length" class="property-group"><b>Markers</b><p v-for="m in layer.markers" :key="m.offset"><a @click="e.frame.value = m.frame">{{ m.frame }} · {{ m.name }}</a></p></div>
+    </div>
+    <p v-else class="empty">选择一个图层查看属性</p>
+  </section>
+</template>
