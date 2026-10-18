@@ -2,19 +2,19 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { NButton, NCheckbox, NInputNumber, NSelect } from 'naive-ui'
 import type { Editor } from '../../editor/state'
-import { channels, type Channel, type Curve } from '../../core/aet/types'
+import { channels, channels3D, videoCurve, type EditableChannel, type Curve } from '../../core/aet/types'
 import { sampleCurve } from '../../core/animation/curves'
 const { editor: e } = defineProps<{ editor: Editor }>()
-const collapsed = ref(false), playing = ref(false), repeat = ref(true), channel = ref<Channel>('positionX'), selectedKey = ref(-1), pixels = ref(3), height = ref(245)
+const collapsed = ref(false), playing = ref(false), repeat = ref(true), channel = ref<EditableChannel>('positionX'), selectedKey = ref(-1), pixels = ref(3), height = ref(245)
 let raf = 0, last = 0
 const range = computed(() => {
   const layers = e.composition.value?.layers ?? []
   return { start: Math.min(e.scene.value?.start ?? 0, ...layers.map(l => l.start)), end: Math.max(e.scene.value?.end ?? 60, ...layers.map(l => l.end), 1) }
 })
 const width = computed(() => Math.max(700, (range.value.end - range.value.start) * pixels.value))
-const curve = computed(() => { e.version.value; return e.selected.value?.video?.curves[channel.value] })
+const curve = computed(() => { e.version.value; return videoCurve(e.selected.value?.video, channel.value) })
 const key = computed(() => curve.value?.keys[selectedKey.value])
-const tracks = computed(() => { e.version.value; return channels.map(ch => ({ channel: ch, curve: e.selected.value?.video?.curves[ch] })) })
+const tracks = computed(() => { e.version.value; return [...channels, ...(e.selected.value?.video?.extra ? channels3D : [])].map(ch => ({ channel: ch, curve: videoCurve(e.selected.value?.video, ch) })) })
 const animationOptions = computed(() => e.composition.value?.layers.map(l => ({ value: l.offset, label: l.name })) ?? [])
 watch(() => [e.selectedId.value, channel.value], () => selectedKey.value = -1, { flush: 'sync' })
 watch(() => [e.sceneIndex.value, e.compositionId.value], () => { stop(); selectedKey.value = -1; e.frame.value = range.value.start })
@@ -48,8 +48,8 @@ function editKey(field: 'frame' | 'value' | 'tangent', value: number | null) {
   if (field === 'frame' && c.keys.some(other => other !== k && other.frame === value)) { e.error.value = '关键帧时间不能重复'; return }
   e.edit(() => { k[field] = value; c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.indexOf(k) })
 }
-function chooseKey(ch: Channel, index: number, c: Curve) { channel.value = ch; selectedKey.value = index; scrub(c.keys[index]!.frame) }
-function dragKey(event: PointerEvent, ch: Channel, index: number, c: Curve) {
+function chooseKey(ch: EditableChannel, index: number, c: Curve) { channel.value = ch; selectedKey.value = index; scrub(c.keys[index]!.frame) }
+function dragKey(event: PointerEvent, ch: EditableChannel, index: number, c: Curve) {
   event.stopPropagation(); chooseKey(ch, index, c)
   if (c.keys.length < 2 || (e.selected.value!.flags & 32)) return
   const startX = event.clientX, original = c.keys[index]!.frame

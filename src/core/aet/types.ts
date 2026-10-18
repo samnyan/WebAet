@@ -1,6 +1,10 @@
 export const channels = ['anchorX', 'anchorY', 'positionX', 'positionY', 'rotation', 'scaleX', 'scaleY', 'opacity'] as const
 export const channels3D = ['anchorZ', 'positionZ', 'directionX', 'directionY', 'directionZ', 'rotationX', 'rotationY', 'scaleZ'] as const
 export type Channel = typeof channels[number]
+export type EditableChannel = Channel | typeof channels3D[number]
+export function videoCurve(video: LayerVideo | null | undefined, channel: EditableChannel): Curve | undefined {
+  return video ? (video.curves as Partial<Record<EditableChannel, Curve>>)[channel] ?? video.extra?.[channel] : undefined
+}
 export interface Keyframe { frame: number; value: number; tangent: number }
 export interface Curve { offset: number; keys: Keyframe[] }
 export interface LayerVideo {

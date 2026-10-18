@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NInput, NInputNumber, NCheckbox, NSelect, NButton } from 'naive-ui'
-import { channels } from '../../core/aet/types'
+import { channels, channels3D } from '../../core/aet/types'
 import type { Editor } from '../../editor/state'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const layer = computed(() => { e.version.value; return e.selected.value })
@@ -26,6 +26,10 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
         <label class="field"><span>混合</span><n-select size="tiny" :value="layer.video.blend" :options="blendOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.blend = v)" /></label>
         <p v-if="layer.video.extra" class="warning">3D 参数保留；当前画布使用 2D 投影。</p>
         <p v-if="layer.video.matte" class="warning">Track matte {{ layer.video.matte }}：保留但尚未渲染。</p>
+      </div>
+      <div v-if="layer.video?.extra" class="property-group"><b>3D 变换</b>
+        <label v-for="ch in channels3D" :key="ch" class="field" :data-channel="ch"><span>{{ ch }}</span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'scaleZ' ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
+        <p class="warning">3D 曲线可编辑并导出；画布尚未应用相机 / 透视。</p>
       </div>
       <div v-if="layer.markers.length" class="property-group"><b>Markers</b><p v-for="m in layer.markers" :key="m.offset"><a @click="e.frame.value = m.frame">{{ m.frame }} · {{ m.name }}</a></p></div>
     </div>

@@ -1,7 +1,7 @@
 import { computed, markRaw, ref, shallowRef, toRaw, triggerRef } from 'vue'
 import { parseAet } from '../core/aet/reader'
 import { writeAet } from '../core/aet/writer'
-import type { AetDocument, Channel, Scene } from '../core/aet/types'
+import { videoCurve, type AetDocument, type EditableChannel, type Scene } from '../core/aet/types'
 import { SpriteLibrary } from '../core/resources/library'
 import { unpackFarc } from '../core/resources/farc'
 import { parseSpriteSet } from '../core/resources/sprites'
@@ -61,10 +61,10 @@ export function createEditor() {
     } catch (e) { error.value = String(e) }
     finally { busy.value = false }
   }
-  function setValue(channel: Channel, value: number) {
+  function setValue(channel: EditableChannel, value: number) {
     const l = selected.value; if (!l?.video || (l.flags & 32)) return
+    const curve = videoCurve(l.video, channel); if (!curve) return
     edit(() => {
-      const curve = l.video!.curves[channel]
       if (curve.keys.length <= 1) curve.keys = [{ frame: 0, value, tangent: 0 }]
       else { const found = curve.keys.find(k => Math.abs(k.frame - frame.value) < 0.0001); if (found) found.value = value; else curve.keys.push({ frame: frame.value, value, tangent: 0 }); curve.keys.sort((a, b) => a.frame - b.frame) }
     })
@@ -80,7 +80,7 @@ export function createEditor() {
       }
     })
   }
-  function currentValue(channel: Channel) { return sampleCurve(selected.value?.video?.curves[channel], frame.value) }
+  function currentValue(channel: EditableChannel) { return sampleCurve(videoCurve(selected.value?.video, channel), frame.value) }
   function exportBinary() { if (!doc.value) return; try { const bytes = writeAet(doc.value); download(bytes, doc.value.name); error.value = '' } catch (e) { error.value = String(e) } }
   function saveProject() {
     if (!doc.value) return
