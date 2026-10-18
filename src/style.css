@@ -29,4 +29,18 @@ button, input { font: inherit; }
 .statusbar { border-top: 1px solid #353b46; padding: 4px 12px; color: #899aae; font-size: 10px; }
 .diagnostics { max-height: 150px; overflow: auto; padding: 6px 12px; background: #2c2822; }.diagnostic-list { max-height: 95px; overflow: auto; }.diagnostic-list p { margin: 2px 0; font-size: 11px; color: #e4bf81; }
 .warning { color: #d7ad68; font-size: 11px; }.welcome { position: absolute; top: 35%; left: 50%; transform: translateX(-50%); text-align: center; max-width: 470px; color: #9caabd; }.welcome h2 { color: #d6e1ee; }
+.timeline { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-height: 38px; background: #20242b; border-top: 1px solid #46515f; }
+.timeline-resize { position: absolute; top: -3px; left: 0; right: 0; height: 5px; cursor: ns-resize; z-index: 3; }
+.timeline-toolbar, .key-editor { display: flex; gap: 8px; align-items: center; padding: 5px 10px; flex-shrink: 0; border-bottom: 1px solid #343c47; }
+.frame-input { width: 90px; }.timeline-layer { width: 240px; }.timeline-body { display: flex; flex: 1; min-height: 0; overflow: auto; }
+.track-labels { width: 155px; flex-shrink: 0; position: sticky; left: 0; z-index: 2; background: #252a32; }
+.track-ruler-label, .time-ruler { height: 25px; border-bottom: 1px solid #4b5562; }
+.track-ruler-label, .track-label { padding: 4px 12px; }.track-label, .track-lane { height: 25px; border-bottom: 1px solid #ffffff08; cursor: pointer; }
+.track-label small { float: right; color: #8394a9; }.track-label.active, .track-lane.active { background: #436b5c25; }
+.tracks-scroll { overflow-x: auto; flex: 1; }.tracks-surface { position: relative; min-height: 100%; }.time-ruler { position: relative; cursor: ew-resize; background: #2c323c; touch-action: none; }
+.time-ruler span { position: absolute; border-left: 1px solid #67778c; padding-left: 4px; font-size: 10px; color: #b1bbca; }
+.track-lane { position: relative; touch-action: none; background-image: repeating-linear-gradient(90deg, transparent, transparent 89px, #ffffff05 89px, #ffffff05 90px); }
+.keyframe { position: absolute; top: 9px; width: 8px; height: 8px; border: 1px solid #a6c8bb; background: #688d80; padding: 0; transform: translateX(-50%) rotate(45deg); cursor: ew-resize; z-index: 1; }.keyframe.chosen { background: #ffdc83; border-color: #fff1b4; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: #f07d79; pointer-events: none; z-index: 2; }
+.key-editor { height: 39px; font-size: 11px; }.key-editor label { display: flex; align-items: center; gap: 5px; }.key-editor .n-input-number { width: 95px; }.muted { color: #7f90a5; }
 @media (max-width: 1000px) { .workspace { grid-template-columns: 210px minmax(100px, 1fr) 240px; }.app-toolbar { flex-wrap: wrap; }.asset-select { width: 180px; }.scene-select { width: 100px; } }

@@ -6,6 +6,7 @@ import { createEditor } from '../editor/state'
 import LayerHierarchy from '../components/editor/LayerHierarchy.vue'
 import LayerInspector from '../components/editor/LayerInspector.vue'
 import AetStage from '../components/editor/AetStage.vue'
+import AetTimeline from '../components/editor/AetTimeline.vue'
 const e = createEditor(), { locale, t } = useI18n()
 const input = ref<HTMLInputElement>(), directory = ref<HTMLInputElement>(), warnings = ref<string[]>([])
 const scenes = computed(() => e.doc.value?.scenes.map((s, i) => ({ value: i, label: s.name })) ?? [])
@@ -50,6 +51,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
     <n-alert v-if="e.error.value" type="error" closable @close="e.error.value = ''">{{ e.error.value }}</n-alert>
     <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LayerHierarchy :editor="e" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
     <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>拖入 aet_*.bin 与 spr_*.farc，或打开资源目录。全部解析与编辑在浏览器本地完成。</p><n-button type="primary" @click="input?.click()">打开 AET / Sprite</n-button></div>
+    <AetTimeline :editor="e" />
     <div class="statusbar"><span>{{ e.doc.value?.name ?? 'No document' }} · {{ e.library.sets.length }} sprite sets · {{ e.library.entries.size }} sprite aliases</span><div class="spacer" /><span>{{ e.scene.value?.fps ?? 0 }} fps</span></div>
     <n-collapse v-if="warnings.length || e.notices.value.length" class="diagnostics"><n-collapse-item :title="`诊断 / Diagnostics (${warnings.length + e.notices.value.length})`" name="diagnostics"><div class="diagnostic-list"><p v-for="w in [...e.notices.value, ...warnings]" :key="w">{{ w }}</p></div></n-collapse-item></n-collapse>
   </div>
