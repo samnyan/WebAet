@@ -25,7 +25,13 @@ function source(value: number) {
   e.edit(() => l.item = value)
 }
 const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
-function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) { if (value === null || !layer.value) return; e.edit(() => { layer.value![key] = value }) }
+function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) {
+  const l = layer.value
+  if (value === null || !l || (l.flags & 32)) return
+  if (!Number.isFinite(Math.fround(value))) { e.error.value = '图层时间参数必须是有限 float32'; return }
+  if ((key === 'start' && !(Math.fround(value) < Math.fround(l.end))) || (key === 'end' && !(Math.fround(l.start) < Math.fround(value)))) { e.error.value = '图层时间范围必须在 float32 精度下 start < end'; return }
+  e.edit(() => { l[key] = value })
+}
 const matteOptions = [{ value: 0, label: '无 / None' }, { value: 1, label: 'Alpha' }, { value: 2, label: '反相 Alpha' }, { value: 3, label: '亮度 / Luma' }, { value: 4, label: '反相亮度 / NotLuma' }]
 const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' }, { value: 6, label: 'Multiply' }, { value: 7, label: 'Screen' }, { value: 8, label: 'Overlay' }, { value: 27, label: 'Difference' }]
 </script>
