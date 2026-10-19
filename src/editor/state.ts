@@ -42,7 +42,7 @@ export function createEditor() {
   function open(bytes: Uint8Array, name: string) {
     const parsed = markRaw(parseAet(bytes, name)); doc.value = parsed; undoStack.length = 0; redoStack.length = 0; historyVersion.value++; markSaved(); selectScene(0); refresh()
   }
-  async function importFiles(files: File[]) {
+  async function importFiles(files: File[], signal?: AbortSignal) {
     const projects = files.filter(file => /\.webaet$/i.test(file.name))
     if (projects.length > 1) { error.value = '一次只能打开一个 WebAet 工程；请分别导入。'; return }
     if (projects.length && dirty.value && !window.confirm('当前修改尚未保存，打开工程会丢弃修改。继续？')) return
@@ -50,22 +50,24 @@ export function createEditor() {
     const incoming: { name: string; bytes: Uint8Array }[] = []
     try {
       for (const file of files) {
+        signal?.throwIfAborted()
         if (!/\.(bin|farc|webaet)$/i.test(file.name)) continue
         try {
           const bytes = new Uint8Array(await file.arrayBuffer())
+          signal?.throwIfAborted()
           if (/\.webaet$/i.test(file.name)) { loadProject(new TextDecoder().decode(bytes)); continue }
-          const entries = /\.farc$/i.test(file.name) ? await unpackFarcAsync(bytes) : new Map([[file.name, bytes]])
+          const entries = /\.farc$/i.test(file.name) ? await unpackFarcAsync(bytes, signal) : new Map([[file.name, bytes]])
           for (const [name, data] of entries) {
             if (/^aet_.*\.bin$/i.test(name) && !/^aet_db/i.test(name)) incoming.push({ name, bytes: data })
             else if (/^spr_db\.bin$/i.test(name)) { library.bindDatabase(parseSpriteDatabase(data)); resourceVersion.value++ }
             else if (/^spr_.*\.bin$/i.test(name) && !/^spr_db/i.test(name)) { library.add(parseSpriteSet(data, name)); resourceVersion.value++ }
           }
-        } catch (e) { notices.value.push(`${file.name}: ${e}`) }
+        } catch (e) { if (signal?.aborted) throw e; notices.value.push(`${file.name}: ${e}`) }
         await new Promise(resolve => setTimeout(resolve, 0))
       }
       documents.value = [...documents.value.filter(d => !incoming.some(n => n.name === d.name)), ...incoming]
       if (incoming.length && !doc.value) open(incoming[0]!.bytes, incoming[0]!.name)
-    } catch (e) { error.value = String(e) }
+    } catch (e) { if (signal?.aborted) throw e; error.value = String(e) }
     finally { busy.value = false }
   }
   function setValue(channel: EditableChannel, value: number) {
