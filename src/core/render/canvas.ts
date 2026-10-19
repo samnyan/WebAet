@@ -16,8 +16,17 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
       const drawn = drawItems(s, [plain], library, selected, false)
       const masked = drawItems(m, [{ ...item.mask, blend: 3 }], library, null, false)
       for (const warning of [...drawn.warnings, ...masked.warnings]) warnings.add(warning)
-      if (item.matte !== 1) warnings.add(`Track matte mode ${item.matte} uses alpha preview (inversion/luma not applied)`)
-      s.resetTransform(); s.globalCompositeOperation = 'destination-in'; s.drawImage(mask, 0, 0)
+      if (item.matte === 3 || item.matte === 4) {
+        // Canvas returns unpremultiplied sRGB. Convert luminance to coverage;
+        // transparent pixels must remain zero coverage before optional inversion.
+        const pixels = m.getImageData(0, 0, mask.width, mask.height)
+        for (let i = 0; i < pixels.data.length; i += 4) {
+          const data = pixels.data
+          data[i + 3] = Math.round(data[i + 3]! * (0.2126 * data[i]! + 0.7152 * data[i + 1]! + 0.0722 * data[i + 2]!) / 255)
+        }
+        m.putImageData(pixels, 0, 0)
+      } else if (item.matte !== 1 && item.matte !== 2) warnings.add(`Unknown track matte mode ${item.matte} uses alpha preview`)
+      s.resetTransform(); s.globalCompositeOperation = item.matte === 2 || item.matte === 4 ? 'destination-out' : 'destination-in'; s.drawImage(mask, 0, 0)
       ctx.save(); ctx.resetTransform(); ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'; ctx.drawImage(source, 0, 0); ctx.restore()
       hits.push(...drawn.hits)
       continue
