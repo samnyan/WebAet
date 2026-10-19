@@ -4,7 +4,8 @@ import { NButton, NSelect, NAlert, NSpin, NTag, NCollapse, NCollapseItem } from 
 import { useI18n } from 'vue-i18n'
 import { createEditor } from '../editor/state'
 import { ResourceDirectory, type DirectoryProgress } from '../editor/resourceDirectory'
-import { parseSpriteDatabase } from '../core/resources/database'
+import { parseSpriteDatabase, type SpriteDatabaseEntry } from '../core/resources/database'
+import { spriteDependencies } from '../core/resources/dependencies'
 import LayerHierarchy from '../components/editor/LayerHierarchy.vue'
 import LayerInspector from '../components/editor/LayerInspector.vue'
 import AetStage from '../components/editor/AetStage.vue'
@@ -36,15 +37,15 @@ async function changeAsset(name: string) {
     progress.value = { phase: '加载 AET', current: name, done: 0, total: 0 }
     const file = await root.value.file(name), bytes = new Uint8Array(await file.arrayBuffer())
     e.open(bytes, name); e.library.clear(); e.documents.value = []; e.resourceVersion.value++
-    const sourceIds = new Set(e.doc.value!.scenes.flatMap(s => s.videos.flatMap(v => v.sources.map(s => s.id))))
+    const sources = e.doc.value!.scenes.flatMap(s => s.videos.flatMap(v => v.sources))
     const dbPaths = root.value.companions(name, new Set(['spr_db.bin']))
-    const needed = new Set<string>([file.name.replace(/^aet_/i, 'spr_').replace(/\.bin$/i, '.farc').toLowerCase()])
+    const database: SpriteDatabaseEntry[] = []
     for (const path of dbPaths) {
       const dbFile = await root.value.file(path), entries = parseSpriteDatabase(new Uint8Array(await dbFile.arrayBuffer()))
-      for (const entry of entries) if (sourceIds.has(entry.id)) needed.add(entry.set.replace(/\.bin$/i, '.farc'))
+      database.push(...entries)
       await e.importFiles([dbFile])
     }
-    const paths = root.value.companions(name, needed)
+    const paths = spriteDependencies(name, sources, database, indexedPaths.value)
     for (let i = 0; i < paths.length; i++) {
       progress.value = { phase: '加载 Sprite', current: paths[i]!, done: i, total: paths.length }
       await e.importFiles([await root.value.file(paths[i]!)])
