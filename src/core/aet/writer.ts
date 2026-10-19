@@ -25,6 +25,7 @@ export function writeAet(doc: AetDocument): Uint8Array {
   }
   const color = (p: number, a: number[]) => a.forEach((v, i) => { if (!Number.isInteger(v) || v < 0 || v > 255) throw new Error('Invalid byte color'); buffer[p + i] = v })
   const curve = (c: Curve, before: Curve) => {
+    if (!before || c.offset !== before.offset) throw new Error('Curve record address changed')
     if (JSON.stringify(c.keys) === JSON.stringify(before.keys)) return
     const keys = c.keys
     for (let i = 0; i < keys.length; i++) {
@@ -50,13 +51,14 @@ export function writeAet(doc: AetDocument): Uint8Array {
     if (s.fps !== old.fps && !(Math.fround(s.fps) > 0)) throw new Error('Scene fps must be positive')
     if ((s.start !== old.start || s.end !== old.end) && !(Math.fround(s.start) < Math.fround(s.end))) throw new Error('Scene start must precede end in float32')
     text(p, s.name, old.name); f(p + 4, s.start); f(p + 8, s.end); f(p + 12, s.fps); color(p + 16, s.color); u(p + 20, s.width); u(p + 24, s.height)
+    if (s.camera.length !== old.camera.length) throw new Error('Camera structure changed')
     s.camera.forEach((c, i) => curve(c, old.camera[i]!))
     s.videos.forEach((v, vi) => {
       const before = old.videos[vi]!
       if (v.offset !== before.offset || v.sources.length !== before.sources.length) throw new Error('Video structure changed')
       integer(v.width, 65535, 'video width'); integer(v.height, 65535, 'video height')
       color(v.offset, v.color); view().setUint16(v.offset + 4, v.width, true); view().setUint16(v.offset + 6, v.height, true); f(v.offset + 8, v.frames)
-      v.sources.forEach((source, i) => { text(source.offset, source.name, before.sources[i]!.name); u(source.offset + 4, source.id) })
+      v.sources.forEach((source, i) => { if (source.offset !== before.sources[i]!.offset) throw new Error('Source record address changed'); text(source.offset, source.name, before.sources[i]!.name); u(source.offset + 4, source.id) })
     })
     s.compositions.forEach((c, ci) => {
       const before = old.compositions[ci]!
@@ -64,6 +66,7 @@ export function writeAet(doc: AetDocument): Uint8Array {
       c.layers.forEach((l, li) => {
         const b = before.layers[li]!, q = l.offset
         if (q !== b.offset || l.markers.length !== b.markers.length || !!l.video !== !!b.video) throw new Error('Layer structure changed')
+        if (l.audio.length !== b.audio.length || l.audio.some((a, i) => a.offset !== b.audio[i]!.offset)) throw new Error('Audio structure changed')
         if (l.parent !== b.parent) {
           integer(l.parent, 0xffffffff, 'layer parent')
           if (!canParent(c, l.offset, l.parent)) throw new Error(`Invalid layer parent: ${l.name} (cycle or reference outside composition)`)
@@ -72,8 +75,9 @@ export function writeAet(doc: AetDocument): Uint8Array {
         integer(l.flags, 65535, 'layer flags'); integer(l.quality, 255, 'layer quality'); integer(l.itemType, 255, 'item type')
         text(q, l.name, b.name); f(q + 4, l.start); f(q + 8, l.end); f(q + 12, l.timeOffset); f(q + 16, l.timeScale)
         view().setUint16(q + 20, l.flags, true); buffer[q + 22] = l.quality; buffer[q + 23] = l.itemType; u(q + 24, l.item); u(q + 28, l.parent)
-        l.markers.forEach((m, i) => { f(m.offset, m.frame); text(m.offset + 4, m.name, b.markers[i]!.name) })
+        l.markers.forEach((m, i) => { if (m.offset !== b.markers[i]!.offset) throw new Error('Marker record address changed'); f(m.offset, m.frame); text(m.offset + 4, m.name, b.markers[i]!.name) })
         if (l.video && b.video) {
+          if (l.video.offset !== b.video.offset || !!l.video.extra !== !!b.video.extra || JSON.stringify(Object.keys(l.video.extra ?? {}).sort()) !== JSON.stringify(Object.keys(b.video.extra ?? {}).sort())) throw new Error('Video channel structure changed')
           integer(l.video.blend, 255, 'blend mode'); integer(l.video.transferFlags, 255, 'transfer flags'); integer(l.video.matte, 255, 'matte mode')
           buffer[l.video.offset] = l.video.blend; buffer[l.video.offset + 1] = l.video.transferFlags; buffer[l.video.offset + 2] = l.video.matte
           for (const ch of channels) curve(l.video.curves[ch], b.video.curves[ch])
