@@ -26,7 +26,22 @@ export function parseSpriteSet(bytes: Uint8Array, name: string): SpriteSet {
   const sprites = r.array(r.u32(12), r.u32(16), 40, (p, i) => ({ name: r.string(r.u32(names + i * 4)), texture: r.u32(p), x: r.f32(p + 24), y: r.f32(p + 28), width: r.f32(p + 32), height: r.f32(p + 36) }))
   return { name, textures, sprites }
 }
+function validateTexture(t: Texture): void {
+  const { width, height, format, data } = t
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || width * height > 67108864) throw new Error('Invalid texture dimensions')
+  const bytesPerPixel: Record<number, number> = { 0: 1, 1: 3, 2: 4, 3: 2, 4: 2, 5: 2, 12: 1, 13: 2 }
+  const blockBytes: Record<number, number> = { 6: 8, 7: 8, 8: 16, 9: 16, 10: 8, 11: 16, 15: 16 }
+  const pixel = bytesPerPixel[format], block = blockBytes[format]
+  if (!pixel && !block) throw new Error(`Unsupported TXP format ${format}`)
+  const required = pixel ? width * height * pixel : Math.ceil(width / 4) * Math.ceil(height / 4) * block!
+  if (data.length < required) throw new Error(`Truncated TXP format ${format}: expected at least ${required} bytes, got ${data.length}`)
+}
 export function decodeTexture(t: Texture): Uint8ClampedArray {
+  validateTexture(t)
+  if (t.chroma) {
+    validateTexture(t.chroma)
+    if (t.format !== 11 || t.chroma.format !== 11) throw new Error('YCbCr textures require BC5 luma and chroma')
+  }
   const { width: w, height: h, format: f, data: d } = t
   const v = new DataView(d.buffer, d.byteOffset, d.byteLength)
   if (t.chroma) {
