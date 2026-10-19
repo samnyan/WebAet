@@ -12,6 +12,7 @@ const segmentId = ref('all')
 const segments = computed(() => { e.version.value; return markerSegments(e.selected.value?.markers ?? []) })
 const segmentOptions = computed(() => [{ value: 'all', label: '完整时间范围' }, ...segments.value.map(s => ({ value: s.id, label: s.label }))])
 const fullRange = computed(() => {
+  e.version.value
   const layers = e.composition.value?.layers ?? []
   return { start: Math.min(e.scene.value?.start ?? 0, ...layers.map(l => l.start)), end: Math.max(e.scene.value?.end ?? 60, ...layers.map(l => l.end), 1) }
 })

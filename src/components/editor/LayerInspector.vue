@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { NInput, NInputNumber, NCheckbox, NSelect, NButton } from 'naive-ui'
 import { channels, channels3D } from '../../core/aet/types'
 import type { Editor } from '../../editor/state'
+import SceneInspector from './SceneInspector.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const layer = computed(() => { e.version.value; return e.selected.value })
 const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
@@ -13,6 +14,7 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
 <template>
   <section class="panel inspector">
     <header>属性 / Inspector</header>
+    <SceneInspector :editor="e" />
     <div v-if="layer" class="property-scroll" :key="layer.offset" :data-version="e.version.value">
       <label class="field"><span>名称</span><n-input size="tiny" :value="layer.name" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.name = v)" /></label>
       <div class="property-group"><b>图层</b><code>0x{{ layer.offset.toString(16) }}</code>
