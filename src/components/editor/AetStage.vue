@@ -14,10 +14,12 @@ const perspective = ref(false)
 const multipleBranches = computed(() => { e.version.value; return !isolate.value && (e.composition.value?.layers.filter(l => l.itemType === 3 && !!(l.flags & 1) && e.frame.value >= l.start && e.frame.value < l.end).length ?? 0) > 1 })
 const view3D = ref(false), yaw = ref(25), pitch = ref(-20)
 let resize: ResizeObserver, hits: HitArea[] = [], scale = 1, origin = { x: 0, y: 0 }, raf = 0
+let previousWarnings: string[] = []
 function draw() {
   const c = canvas.value, bounds = host.value?.getBoundingClientRect(); if (!c || !bounds) return
-  const ratio = devicePixelRatio || 1; c.width = Math.round(bounds.width * ratio); c.height = Math.round(bounds.height * ratio)
-  const ctx = c.getContext('2d')!; ctx.scale(ratio, ratio); ctx.fillStyle = '#171a20'; ctx.fillRect(0, 0, bounds.width, bounds.height)
+  const ratio = devicePixelRatio || 1, width = Math.round(bounds.width * ratio), height = Math.round(bounds.height * ratio)
+  if (c.width !== width || c.height !== height) { c.width = width; c.height = height }
+  const ctx = c.getContext('2d')!; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.clearRect(0, 0, bounds.width, bounds.height); ctx.fillStyle = '#171a20'; ctx.fillRect(0, 0, bounds.width, bounds.height)
   const s = e.scene.value; if (!s) return
   scale = Math.min((bounds.width - 48) / s.width, (bounds.height - 48) / s.height) * zoom.value
   origin = { x: (bounds.width - s.width * scale) / 2 + pan.value.x, y: (bounds.height - s.height * scale) / 2 + pan.value.y }
@@ -29,9 +31,10 @@ function draw() {
   ctx.restore()
   if (view3D.value && !perspective.value) drawSpatialGuides(ctx, observationMatrix(s.width, s.height, yaw.value, pitch.value), s.width, s.height, scale)
   else if (!view3D.value) { ctx.strokeStyle = '#5a6370'; ctx.lineWidth = 1 / scale; ctx.strokeRect(0, 0, s.width, s.height) }
-  emit('warnings', [...evaluated.warnings, ...result.warnings])
+  const warnings = [...evaluated.warnings, ...result.warnings]
+  if (warnings.length !== previousWarnings.length || warnings.some((w, i) => w !== previousWarnings[i])) { previousWarnings = warnings; emit('warnings', warnings) }
 }
-function schedule() { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw) }
+function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw() }) }
 watch(() => [e.version.value, e.resourceVersion.value, e.doc.value, e.sceneIndex.value, e.compositionId.value, e.selectedId.value, e.frame.value, e.hidden.value, zoom.value, pan.value, wireframe.value, isolate.value, view3D.value, perspective.value, yaw.value, pitch.value], schedule)
 onMounted(() => { resize = new ResizeObserver(schedule); resize.observe(host.value!); schedule() })
 onBeforeUnmount(() => { resize?.disconnect(); cancelAnimationFrame(raf) })
@@ -79,7 +82,7 @@ async function exportPreview(native = false) {
       const result = renderSceneFrame(e.scene.value, e.compositionId.value, e.frame.value, e.library)
       target = result.canvas
       e.notices.value = result.warnings.map(w => `场景 PNG: ${w}`)
-    } else { cancelAnimationFrame(raf); draw() }
+    } else { cancelAnimationFrame(raf); raf = 0; draw() }
     const name = `${e.doc.value!.name.replace(/\.bin$/i, '')}_${e.scene.value.name}_${native ? 'scene' : view3D.value ? '3d' : '2d'}_${e.frame.value.toFixed(2)}f.png`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
     const blob = await new Promise<Blob>((resolve, reject) => target.toBlob(b => b ? resolve(b) : reject(new Error('PNG 编码失败')), 'image/png'))
     const url = URL.createObjectURL(blob)

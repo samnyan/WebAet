@@ -10,30 +10,34 @@ export function layerMatrix(layer: Layer, frame: number): Matrix {
 }
 export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4(), perspective?: Perspective): Evaluation {
   const items: DrawItem[] = [], warnings = new Set<string>()
+  const compositions = new Map(scene.compositions.map(c => [c.offset, c])), videos = new Map(scene.videos.map(v => [v.offset, v]))
   // AetObj keeps pending sprite state across recursive DispComp calls.
   let pendingMatte: DrawItem | undefined
   if (scene.camera.length) warnings.add('AET camera Eye translation applied (ReDIVA runtime); full camera perspective is not implemented')
   const walk = (id: number, time: number, base: Matrix4, alpha: number, path: number[], ancestors: Set<number>) => {
     if (ancestors.has(id)) { warnings.add('Composition cycle omitted'); return }
-    const comp = scene.compositions.find(c => c.offset === id); if (!comp) return
+    const comp = compositions.get(id); if (!comp) return
+    const layers = new Map(comp.layers.map(l => [l.offset, l])), matrices = new Map<number, Matrix4>()
+    const localMatrix = (l: Layer) => { let matrix = matrices.get(l.offset); if (!matrix) { matrix = layerMatrix4(l, time); matrices.set(l.offset, matrix) }; return matrix }
     const next = new Set(ancestors); next.add(id)
     const parentMatrix = (l: Layer, seen = new Set<number>()): Matrix4 => {
       if (!l.parent) return identity4()
       if (seen.has(l.parent)) { warnings.add('Parent cycle omitted'); return identity4() }
-      const p = comp.layers.find(x => x.offset === l.parent); if (!p) return identity4()
-      seen.add(p.offset); return multiply4(parentMatrix(p, seen), layerMatrix4(p, time))
+      const p = layers.get(l.parent); if (!p) return identity4()
+      seen.add(p.offset); return multiply4(parentMatrix(p, seen), localMatrix(p))
     }
-    for (const l of [...comp.layers].reverse()) {
+    for (let index = comp.layers.length - 1; index >= 0; index--) {
+      const l = comp.layers[index]!
       if (hidden.has(l.offset) || (!(l.flags & 1) && !pendingMatte) || time < l.start || time >= l.end) continue
       if (l.video?.extra) warnings.add(perspective ? 'Editor perspective approximation; full AET camera perspective not implemented' : '3D transforms use orthographic preview; full AET camera perspective not implemented')
       if (l.itemType === 2) { warnings.add('Audio playback is not supported'); continue }
-      const matrix = multiply4(multiply4(base, parentMatrix(l)), layerMatrix4(l, time))
+      const matrix = multiply4(multiply4(base, parentMatrix(l)), localMatrix(l))
       const opacity = alpha * (l.video ? Math.max(0, Math.min(1, sampleCurve(l.video.curves.opacity, time))) : 1)
       const local = (time - l.start) * l.timeScale + l.timeOffset, currentPath = [...path, l.offset]
       if (l.itemType === 3) {
         walk(l.item, local, matrix, opacity, currentPath, next); continue
       }
-      const video = scene.videos.find(v => v.offset === l.item)
+      const video = videos.get(l.item)
       if (!video || (opacity <= 0 && !pendingMatte && !l.video?.matte)) continue
       if (video.sources.length > 1 && (l.flags & 8)) warnings.add('Sprite sequence motion blur is not applied')
       // DispVideo adds an epsilon, then converts to int32 (truncation, not floor).
@@ -41,7 +45,8 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       const sourceIndex = video.sources.length <= 1 ? 0 : Math.trunc(local * video.frames + 0.0001)
       const source = video.sources[sourceIndex]
       if (video.sources.length > 1 && !source) { warnings.add(`Sprite sequence index out of range: ${l.name} (${sourceIndex})`); continue }
-      const item: DrawItem = { layer: l, path: currentPath, world: multiply4(view, matrix), perspective, matrix: orthographicMatrix(multiply4(view, matrix)), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
+      const world = multiply4(view, matrix)
+      const item: DrawItem = { layer: l, path: currentPath, world, perspective, matrix: orthographicMatrix(world), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
       // Runtime draws back-to-front: a matte-tagged source is retained, then masked by the next sprite.
       if (pendingMatte) { pendingMatte.mask = item; items.push(pendingMatte); pendingMatte = undefined }
       else if (item.matte) pendingMatte = item

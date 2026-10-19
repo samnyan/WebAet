@@ -4,14 +4,27 @@ import { drawPerspective, perspectivePoint, clipPerspective } from './perspectiv
 import type { SpriteLibrary } from '../resources/library'
 const blends: Record<number, GlobalCompositeOperation> = { 1: 'copy', 3: 'source-over', 5: 'lighter', 6: 'multiply', 7: 'screen', 8: 'overlay', 9: 'soft-light', 10: 'hard-light', 11: 'darken', 12: 'lighten', 14: 'hue', 15: 'saturation', 16: 'color', 17: 'luminosity', 26: 'exclusion', 27: 'difference', 28: 'color-dodge', 29: 'color-burn' }
 export interface HitArea { item: DrawItem; points: { x: number; y: number }[] }
+// Scratch surfaces belong to the destination context. Leases keep recursive
+// matte/perspective draws independent, without retaining one surface per sprite.
+const scratchPools = new WeakMap<CanvasRenderingContext2D, CanvasRenderingContext2D[]>()
+function scratch(owner: CanvasRenderingContext2D, width: number, height: number) {
+  let pool = scratchPools.get(owner)
+  if (!pool) { pool = []; scratchPools.set(owner, pool) }
+  const ctx = pool.pop() ?? document.createElement('canvas').getContext('2d')!
+  if (ctx.canvas.width !== width || ctx.canvas.height !== height) { ctx.canvas.width = width; ctx.canvas.height = height }
+  else ctx.clearRect(0, 0, width, height)
+  ctx.save()
+  return { ctx, release() { ctx.restore(); if (pool!.length < 2) pool!.push(ctx) } }
+}
 export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], library: SpriteLibrary, selected: number | null, wireframe: boolean): { hits: HitArea[]; warnings: string[] } {
   const hits: HitArea[] = [], warnings = new Set<string>()
   for (const item of items) {
     if (item.mask && !wireframe) {
       // Composite in backing-store coordinates so zoom, pan and device scale match the stage.
-      const source = document.createElement('canvas'), mask = document.createElement('canvas')
-      source.width = mask.width = ctx.canvas.width; source.height = mask.height = ctx.canvas.height
-      const s = source.getContext('2d')!, m = mask.getContext('2d')!, transform = ctx.getTransform()
+      const sourceLease = scratch(ctx, ctx.canvas.width, ctx.canvas.height), maskLease = scratch(ctx, ctx.canvas.width, ctx.canvas.height)
+      const s = sourceLease.ctx, m = maskLease.ctx, source = s.canvas, mask = m.canvas
+      try {
+      const transform = ctx.getTransform()
       s.setTransform(transform); m.setTransform(transform)
       const plain = { ...item, mask: undefined, blend: 3 }
       const drawn = drawItems(s, [plain], library, selected, false)
@@ -30,6 +43,7 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
       s.resetTransform(); s.globalCompositeOperation = item.matte === 2 || item.matte === 4 ? 'destination-out' : 'destination-in'; s.drawImage(mask, 0, 0)
       ctx.save(); ctx.resetTransform(); ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'; ctx.drawImage(source, 0, 0); ctx.restore()
       hits.push(...drawn.hits)
+      } finally { maskLease.release(); sourceLease.release() }
       continue
     }
     const entry = library.find(item.sourceName, item.sourceId), w = entry?.sprite.width ?? item.video.width, h = entry?.sprite.height ?? item.video.height
@@ -37,13 +51,16 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
       const polygon = clipPerspective(item.world, [[0, 0], [w, 0], [w, h], [0, h]], item.perspective)
       const points = polygon.map(([x, y]) => perspectivePoint(item.world!, x, y, item.perspective!))
       if (points.length < 3 || points.some(p => !p)) continue
-      const texture = document.createElement('canvas'); texture.width = Math.max(1, Math.min(4096, Math.ceil(w))); texture.height = Math.max(1, Math.min(4096, Math.ceil(h)))
-      const local = texture.getContext('2d')!; local.scale(texture.width / w, texture.height / h)
-      const rendered = drawItems(local, [{ ...item, perspective: undefined, matrix: identity(), opacity: 1, blend: 3 }], library, selected, wireframe)
-      for (const warning of rendered.warnings) warnings.add(warning)
-      ctx.save(); ctx.globalAlpha *= item.opacity; ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'
-      drawPerspective(ctx, texture, item.world, item.perspective, w, h); ctx.restore()
-      hits.push({ item, points: points as { x: number; y: number }[] }); continue
+      const lease = scratch(ctx, Math.max(1, Math.min(4096, Math.ceil(w))), Math.max(1, Math.min(4096, Math.ceil(h))))
+      try {
+        const local = lease.ctx, texture = local.canvas; local.scale(texture.width / w, texture.height / h)
+        const rendered = drawItems(local, [{ ...item, perspective: undefined, matrix: identity(), opacity: 1, blend: 3 }], library, selected, wireframe)
+        for (const warning of rendered.warnings) warnings.add(warning)
+        ctx.save(); ctx.globalAlpha *= item.opacity; ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'
+        drawPerspective(ctx, texture, item.world, item.perspective, w, h); ctx.restore()
+        hits.push({ item, points: points as { x: number; y: number }[] })
+      } finally { lease.release() }
+      continue
     }
     ctx.save(); ctx.transform(...item.matrix); ctx.globalAlpha *= item.opacity
     ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'
