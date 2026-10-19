@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import { NInput, NInputNumber } from 'naive-ui'
 import type { Editor } from '../../editor/state'
-import { sampleCurve, sampleCurveTangent } from '../../core/animation/curves'
+import { sampleCurve } from '../../core/animation/curves'
+import { keysWithValue } from '../../core/animation/setValue'
 function eye(index: number, value: number | null) {
   const curve = e.scene.value?.camera[index]
-  if (!curve || value === null || !Number.isFinite(Math.fround(value))) return
-  e.edit(() => {
-    if (curve.keys.length <= 1) curve.keys = [{ frame: 0, value, tangent: 0 }]
-    else {
-      const frame = Math.fround(e.frame.value), found = curve.keys.find(k => k.frame === frame)
-      if (found) found.value = value
-      else { const tangent = sampleCurveTangent(curve, frame); curve.keys.push({ frame, value, tangent }); curve.keys.sort((a, b) => a.frame - b.frame) }
-    }
-  })
+  if (!curve || value === null) return
+  e.edit(() => { curve.keys = keysWithValue(curve, e.frame.value, value) })
 }
 const { editor: e } = defineProps<{ editor: Editor }>()
 function number(key: 'width' | 'height' | 'fps' | 'start' | 'end', value: number | null) {

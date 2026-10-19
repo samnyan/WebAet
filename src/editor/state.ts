@@ -6,7 +6,8 @@ import { SpriteLibrary } from '../core/resources/library'
 import { unpackFarc } from '../core/resources/farc'
 import { parseSpriteSet } from '../core/resources/sprites'
 import { parseSpriteDatabase } from '../core/resources/database'
-import { sampleCurve, sampleCurveTangent } from '../core/animation/curves'
+import { sampleCurve } from '../core/animation/curves'
+import { keysWithValue } from '../core/animation/setValue'
 
 export function createEditor() {
   const doc = shallowRef<AetDocument | null>(null), library = markRaw(new SpriteLibrary())
@@ -70,16 +71,7 @@ export function createEditor() {
   function setValue(channel: EditableChannel, value: number) {
     const l = selected.value; if (!l?.video || (l.flags & 32)) return
     const curve = videoCurve(l.video, channel); if (!curve) return
-    edit(() => {
-      const time = Math.fround(frame.value)
-      if (!Number.isFinite(Math.fround(value)) || !Number.isFinite(time)) throw new Error('属性值和帧时间必须是有限 float32')
-      if (curve.keys.length <= 1) curve.keys = [{ frame: 0, value, tangent: 0 }]
-      else {
-        const found = curve.keys.find(k => k.frame === time)
-        if (found) found.value = value
-        else { const tangent = sampleCurveTangent(curve, time); curve.keys.push({ frame: time, value, tangent }); curve.keys.sort((a, b) => a.frame - b.frame) }
-      }
-    })
+    edit(() => { curve.keys = keysWithValue(curve, frame.value, value) })
   }
   function restoreChannel(channel: EditableChannel) {
     const l = selected.value, current = doc.value
