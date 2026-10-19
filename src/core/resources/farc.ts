@@ -1,5 +1,5 @@
 import { cbc, ecb } from '@noble/ciphers/aes.js'
-import { gunzipSync } from 'fflate'
+import { unpackGzip } from './gzip'
 const ftKey = Uint8Array.from([0x13, 0x72, 0xd5, 0x7b, 0x6e, 0x9e, 0x31, 0xeb, 0xa2, 0x39, 0xb8, 0x3c, 0x15, 0x57, 0xc6, 0xbb])
 
 export function unpackFarc(bytes: Uint8Array): Map<string, Uint8Array> {
@@ -51,7 +51,10 @@ export function unpackFarc(bytes: Uint8Array): Map<string, Uint8Array> {
       if (padding > 0 && padding <= 16 && end >= 18 && data.subarray(end).every(value => value === padding)
         && new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(end - 4, true) === unpacked) data = data.slice(0, end)
     }
-    if (compressed) { if (unpacked > 512 * 1024 * 1024) throw new Error('FARC entry too large'); data = new Uint8Array(gunzipSync(data)) }
+    if (compressed) {
+      try { data = unpackGzip(data, unpacked) }
+      catch (error) { throw new Error(`FARC entry "${name}": ${error instanceof Error ? error.message : String(error)}`) }
+    }
     if (unpacked && data.length !== unpacked) throw new Error(`FARC entry "${name}" decompressed size mismatch: expected ${unpacked} bytes, got ${data.length}; archive may be incomplete or unsupported`)
     entries.set(name, data)
   }
