@@ -9,6 +9,15 @@ export function perspectivePoint(m: Matrix4, x: number, y: number, camera: Persp
 }
 /** Subdivided affine triangles approximate a perspective textured plane on Canvas2D. */
 export function drawPerspective(ctx: CanvasRenderingContext2D, image: HTMLCanvasElement, matrix: Matrix4, camera: Perspective, width: number, height: number) {
+  // A plane parallel to the image plane has constant depth, so perspective is
+  // exactly affine. One draw avoids triangle-edge alpha seams and 288 clips.
+  if (Math.abs(matrix[2]! * width) + Math.abs(matrix[6]! * height) < 1e-8) {
+    const p = perspectivePoint(matrix, 0, 0, camera), q = perspectivePoint(matrix, width, 0, camera), r = perspectivePoint(matrix, 0, height, camera)
+    if (!p || !q || !r) return
+    ctx.save()
+    ctx.transform((q.x - p.x) / width, (q.y - p.y) / width, (r.x - p.x) / height, (r.y - p.y) / height, p.x, p.y)
+    ctx.drawImage(image, 0, 0, width, height); ctx.restore(); return
+  }
   const steps = 12
   for (let y = 0; y < steps; y++) for (let x = 0; x < steps; x++) {
     const left = x * width / steps, right = (x + 1) * width / steps, top = y * height / steps, bottom = (y + 1) * height / steps
