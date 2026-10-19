@@ -39,6 +39,9 @@ export function createEditor() {
     const parsed = markRaw(parseAet(bytes, name)); doc.value = parsed; undoStack.length = 0; redoStack.length = 0; historyVersion.value++; dirty.value = false; selectScene(0); refresh()
   }
   async function importFiles(files: File[]) {
+    const projects = files.filter(file => /\.webaet$/i.test(file.name))
+    if (projects.length > 1) { error.value = '一次只能打开一个 WebAet 工程；请分别导入。'; return }
+    if (projects.length && dirty.value && !window.confirm('当前修改尚未保存，打开工程会丢弃修改。继续？')) return
     busy.value = true; error.value = ''; notices.value = []
     const incoming: { name: string; bytes: Uint8Array }[] = []
     try {
@@ -46,7 +49,7 @@ export function createEditor() {
         if (!/\.(bin|farc|webaet)$/i.test(file.name)) continue
         try {
           const bytes = new Uint8Array(await file.arrayBuffer())
-          if (file.name.endsWith('.webaet')) { loadProject(new TextDecoder().decode(bytes)); continue }
+          if (/\.webaet$/i.test(file.name)) { loadProject(new TextDecoder().decode(bytes)); continue }
           const entries = /\.farc$/i.test(file.name) ? unpackFarc(bytes) : new Map([[file.name, bytes]])
           for (const [name, data] of entries) {
             if (/^aet_.*\.bin$/i.test(name) && !/^aet_db/i.test(name)) incoming.push({ name, bytes: data })
