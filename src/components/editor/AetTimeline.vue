@@ -4,6 +4,7 @@ import { NButton, NCheckbox, NInputNumber, NSelect } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import { channels, channels3D, videoCurve, type EditableChannel, type Curve } from '../../core/aet/types'
 import { sampleCurve } from '../../core/animation/curves'
+import { adjacentKey } from '../../core/animation/keySearch'
 import { insertSampledKey } from '../../core/animation/insertKey'
 import { markerSegments } from '../../core/animation/segments'
 import { retimeKeys } from '../../core/animation/retime'
@@ -11,6 +12,7 @@ import { retimeLayer } from '../../core/animation/retimeLayer'
 import { reverseKeys } from '../../core/animation/reverse'
 import { offsetKeyValues } from '../../core/animation/offsetValues'
 import CurvePreview from './CurvePreview.vue'
+import AetTimelineCanvas from './AetTimelineCanvas.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const showCurve = ref(false), playbackSpeed = ref(1), reverse = ref(false)
 const speedOptions = [0.25, 0.5, 1, 2].map(value => ({ value, label: `${value}×` }))
@@ -36,30 +38,8 @@ watch(segmentOptions, list => { if (!list.some(s => s.value === segmentId.value)
 watch(() => [range.value.start, range.value.end], () => { stop(); e.frame.value = Math.max(range.value.start, Math.min(range.value.end, e.frame.value)) })
 watch(segmentId, () => { stop(); e.frame.value = range.value.start })
 const followPlayhead = ref(false)
-const scrollHost = ref<HTMLElement>()
-function revealPlayhead() {
-  const host = scrollHost.value
-  if (!followPlayhead.value || !host || host.clientWidth <= 0) return
-  const x = (e.frame.value - range.value.start) * pixels.value
-  const margin = Math.min(60, host.clientWidth / 4)
-  if (x < host.scrollLeft + margin) host.scrollLeft = Math.max(0, x - margin)
-  else if (x > host.scrollLeft + host.clientWidth - margin) host.scrollLeft = x - host.clientWidth + margin
-}
-watch(() => [e.frame.value, pixels.value, followPlayhead.value, collapsed.value, range.value.start], revealPlayhead, { flush: 'post' })
-const width = computed(() => Math.max(1, (range.value.end - range.value.start) * pixels.value))
-const ticks = computed(() => {
-  const span = range.value.end - range.value.start
-  const desired = Math.max(1, 90 / pixels.value, span / 500)
-  const magnitude = 10 ** Math.floor(Math.log10(desired))
-  const step = ([1, 2, 5, 10].find(v => v * magnitude >= desired) ?? 10) * magnitude
-  const first = Math.ceil(range.value.start / step) * step
-  return Array.from({ length: Math.max(0, Math.min(501, Math.floor((range.value.end - first) / step) + 1)) }, (_, i) => first + i * step)
-})
-function fitRange() {
-  const host = scrollHost.value, span = range.value.end - range.value.start
-  if (!host || span <= 0) return
-  pixels.value = Math.min(30, Math.max(1, host.clientWidth - 16) / span); host.scrollLeft = 0
-}
+const viewport = ref<InstanceType<typeof AetTimelineCanvas>>()
+function fitRange() { viewport.value?.fit() }
 const curve = computed(() => { e.version.value; return videoCurve(e.selected.value?.video, channel.value) })
 // Curves are markRaw and edited in place: expose a fresh display snapshot per revision.
 const key = computed(() => { e.version.value; const k = curve.value?.keys[selectedKey.value]; return k ? { ...k } : undefined })
@@ -85,15 +65,13 @@ function tick(now: number) {
   last = now; raf = requestAnimationFrame(tick)
 }
 function toggle() { if (!e.doc.value || e.busy.value || document.hidden) return; if (playing.value) stop(); else { if (e.frame.value < range.value.start || e.frame.value >= range.value.end || (reverse.value && e.frame.value <= range.value.start)) e.frame.value = reverse.value ? Math.max(range.value.start, range.value.end - 1) : range.value.start; playing.value = true; raf = requestAnimationFrame(tick) } }
-const previousKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.reduce((found, k, i) => k.frame < e.frame.value - 0.0001 && k.frame >= range.value.start && k.frame < range.value.end ? i : found, -1) : -1 })
-const nextKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.findIndex(k => k.frame > e.frame.value + 0.0001 && k.frame >= range.value.start && k.frame < range.value.end) : -1 })
+const previousKey = computed(() => { e.version.value; return adjacentKey(curve.value?.keys ?? [], e.frame.value, range.value.start, range.value.end, -1) })
+const nextKey = computed(() => { e.version.value; return adjacentKey(curve.value?.keys ?? [], e.frame.value, range.value.start, range.value.end, 1) })
 function jumpKey(index: number) {
   const target = curve.value?.keys[index]; if (!target || index < 0) return
   stop(); selectedKey.value = index; e.frame.value = target.frame
 }
 function scrub(value: number) { stop(); e.frame.value = Math.max(range.value.start, Math.min(range.value.end, value)) }
-function timeAt(event: PointerEvent) { const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect(); return range.value.start + (event.clientX - bounds.left) / pixels.value }
-function rulerDown(event: PointerEvent) { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); scrub(timeAt(event)) }
 function addKey() {
   const c = curve.value; if (!c || (e.selected.value!.flags & 32)) return
   e.edit(() => {
@@ -155,17 +133,6 @@ function editKey(field: 'frame' | 'value' | 'tangent', value: number | null) {
   e.edit(() => { k[field] = encoded; c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.indexOf(k) })
 }
 function chooseKey(ch: EditableChannel, index: number, c: Curve) { channel.value = ch; selectedKey.value = index; scrub(c.keys[index]!.frame) }
-function dragKey(event: PointerEvent, ch: EditableChannel, index: number, c: Curve) {
-  event.stopPropagation(); chooseKey(ch, index, c)
-  if (c.keys.length < 2 || (e.selected.value!.flags & 32)) return
-  const startX = event.clientX, original = c.keys[index]!.frame
-  const up = (end: PointerEvent) => {
-    window.removeEventListener('pointerup', up)
-    const target = Math.round(original + (end.clientX - startX) / pixels.value)
-    if (Math.abs(end.clientX - startX) > 3) editKey('frame', target)
-  }
-  window.addEventListener('pointerup', up, { once: true })
-}
 function resize(event: PointerEvent) {
   const y = event.clientY, h = height.value
   const move = (ev: PointerEvent) => height.value = Math.max(140, Math.min(innerHeight * 0.65, h + y - ev.clientY))
@@ -194,15 +161,10 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard);
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
       <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="segmentOptions.length < 2" />
       <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small">倒放</n-checkbox><n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
-      <div class="spacer" /><n-checkbox data-testid="follow-playhead" v-model:checked="followPlayhead" size="small">跟随播放头</n-checkbox><n-button data-testid="fit-timeline" size="tiny" @click="fitRange">适应范围</n-button><n-button size="tiny" @click="pixels = Math.max(0.000001, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
+      <div class="spacer" /><n-checkbox data-testid="follow-playhead" v-model:checked="followPlayhead" size="small">跟随播放头</n-checkbox><n-button data-testid="fit-timeline" size="tiny" @click="fitRange">适应范围</n-button><n-button size="tiny" @click="viewport?.setZoom(pixels / 1.4)">−</n-button><n-button size="tiny" @click="viewport?.setZoom(pixels * 1.4)">+</n-button>
     </template></div>
-    <template v-if="!collapsed"><div class="timeline-body"><div class="track-labels"><div class="track-ruler-label">属性</div><div v-for="track in tracks" :key="track.channel" class="track-label" :class="{ active: channel === track.channel }" @click="channel = track.channel">{{ track.channel }} <small>{{ track.curve?.keys.length ?? 0 }}</small></div></div>
-      <div ref="scrollHost" class="tracks-scroll"><div class="tracks-surface" :style="{ width: `${width}px` }">
-        <div v-memo="[ticks, pixels, range.start]" class="time-ruler" @pointerdown="rulerDown" @pointermove="($event.buttons & 1) && scrub(timeAt($event))"><span v-for="tick in ticks" :key="tick" :style="{ left: `${(tick - range.start) * pixels}px` }">{{ tick }}</span></div>
-        <div v-for="track in tracks" :key="track.channel" v-memo="[track, e.version.value, channel, selectedKey, pixels, range.start]" class="track-lane" :class="{ active: channel === track.channel }" @pointerdown="channel = track.channel; rulerDown($event)" @pointermove="($event.buttons & 1) && scrub(timeAt($event))">
-          <button v-for="(k, i) in track.curve?.keys ?? []" :key="i" class="keyframe" :class="{ chosen: channel === track.channel && selectedKey === i }" :style="{ left: `${((track.curve!.keys.length === 1 ? range.start : k.frame) - range.start) * pixels}px` }" :title="`${track.channel}: ${k.frame}f = ${k.value}, tangent ${k.tangent}`" @pointerdown="dragKey($event, track.channel, i, track.curve!)" />
-        </div><div class="playhead" :style="{ left: `${(e.frame.value - range.start) * pixels}px` }" />
-      </div></div></div>
+    <template v-if="!collapsed">
+      <AetTimelineCanvas ref="viewport" :tracks="tracks" :start="range.start" :end="range.end" :frame="e.frame.value" :pixels="pixels" :channel="channel" :selected-key="selectedKey" :revision="e.version.value" :follow="followPlayhead" :playing="playing" :locked="!!(e.selected.value?.flags! & 32)" :disabled="e.busy.value || !e.doc.value" @seek="scrub" @select="chooseKey" @channel="channel = $event" @move-key="editKey('frame', $event)" @zoom="pixels = $event" />
       <CurvePreview v-if="showCurve" :curve="curve" :start="range.start" :end="range.end" :frame="e.frame.value" :revision="e.version.value" @scrub="scrub" @select-key="i => curve && chooseKey(channel, i, curve)" />
       <div class="key-editor"><span>{{ channel }}</span><n-button data-testid="copy-curve" size="tiny" :disabled="!curve" @click="copyCurve">复制曲线</n-button><n-button data-testid="paste-curve" size="tiny" :disabled="!curve || !copiedCurve || copiedCurve.channel !== channel || !!(e.selected.value!.flags & 32)" :title="copiedCurve ? `替换整条 ${copiedCurve.channel} 曲线（${copiedCurve.keys.length} 个键）` : '先复制同名轨道曲线'" @click="pasteCurve">替换曲线</n-button><n-button data-testid="restore-channel" size="tiny" :disabled="!curve || !!(e.selected.value!.flags & 32)" @click="restoreChannel">恢复原始轨道</n-button><n-button data-testid="make-constant" size="tiny" :disabled="!curve || curve.keys.length < 2 || !!(e.selected.value!.flags & 32)" @click="makeConstant">转为常量</n-button><n-button data-testid="previous-key" size="tiny" :disabled="previousKey < 0" @click="jumpKey(previousKey)">◀◆</n-button><n-button data-testid="next-key" size="tiny" :disabled="nextKey < 0" @click="jumpKey(nextKey)">◆▶</n-button><n-button data-testid="add-key" size="tiny" :disabled="!curve || !!(e.selected.value!.flags & 32)" @click="addKey">＋关键帧</n-button><n-button data-testid="delete-key" size="tiny" :disabled="!key || !!(e.selected.value!.flags & 32)" @click="deleteKey">删除</n-button>
         <template v-if="key"><label v-for="field in (['frame', 'value', 'tangent'] as const)" :key="field">{{ field }}<n-input-number :data-key-field="field" size="tiny" :value="key[field]" :show-button="false" :disabled="!!(e.selected.value!.flags & 32) || (field === 'frame' && curve!.keys.length === 1)" @update:value="editKey(field, $event)" /></label></template><span v-else class="muted">选择 ◆ 编辑时间 / 数值 / Hermite 切线，拖动 ◆ 改时间</span>
