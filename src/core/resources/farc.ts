@@ -42,6 +42,15 @@ export function unpackFarc(bytes: Uint8Array): Map<string, Uint8Array> {
       ? new Uint8Array(cbc(ftKey, data.slice(0, 16), { disablePadding: true }).decrypt(data.slice(16)))
       : new Uint8Array(ecb(new TextEncoder().encode('project_diva.bin'), { disablePadding: true }).decrypt(data))
     data = data.slice(0, size)
+    // Some FT archives include PKCS#7 padding in the declared packed size.
+    // Do not feed it to gzip: fflate reads ISIZE from the final four bytes.
+    // Classic/zero-padded archives retain their existing declared-size handling.
+    if (futureTone && encrypted && compressed) {
+      const padding = data.at(-1) ?? 0
+      const end = data.length - padding
+      if (padding > 0 && padding <= 16 && end >= 18 && data.subarray(end).every(value => value === padding)
+        && new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(end - 4, true) === unpacked) data = data.slice(0, end)
+    }
     if (compressed) { if (unpacked > 512 * 1024 * 1024) throw new Error('FARC entry too large'); data = new Uint8Array(gunzipSync(data)) }
     if (unpacked && data.length !== unpacked) throw new Error(`FARC entry "${name}" decompressed size mismatch: expected ${unpacked} bytes, got ${data.length}; archive may be incomplete or unsupported`)
     entries.set(name, data)
