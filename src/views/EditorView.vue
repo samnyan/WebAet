@@ -16,6 +16,7 @@ const scenes = computed(() => e.doc.value?.scenes.map((s, i) => ({ value: i, lab
 const root = ref<ResourceDirectory>(), indexedPaths = ref<string[]>([]), progress = ref<DirectoryProgress | null>(null)
 const assets = computed(() => root.value ? indexedPaths.value.filter(p => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p)).map(p => ({ value: p, label: p })) : e.documents.value.map(d => ({ value: d.name, label: d.name })))
 async function filesChanged(event: Event) { const target = event.target as HTMLInputElement; if (target.files) await e.importFiles([...target.files]); target.value = '' }
+let scanController: AbortController | undefined
 async function pickDirectory(rescan = false) {
   if (e.busy.value) return
   const picker = (window as unknown as { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker
@@ -24,10 +25,11 @@ async function pickDirectory(rescan = false) {
     const selected = rescan && root.value ? root.value.root : await picker()
     e.busy.value = true; progress.value = { phase: '读取索引', current: selected.name, done: 0, total: 0 }
     const index = new ResourceDirectory(selected)
-    await index.scan(rescan, p => { progress.value = p })
+    scanController = new AbortController()
+    await index.scan(rescan, p => { progress.value = p }, scanController.signal)
     root.value = index; indexedPaths.value = index.paths
   } catch (err) { if ((err as Error).name !== 'AbortError') e.error.value = String(err) }
-  finally { e.busy.value = false; progress.value = null }
+  finally { scanController = undefined; e.busy.value = false; progress.value = null }
 }
 async function changeAsset(name: string) {
   if (e.busy.value || e.dirty.value && !window.confirm('当前修改尚未保存，切换资源会丢弃修改。继续？')) return
@@ -78,7 +80,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
     <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LayerHierarchy :editor="e" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
     <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" @click="input?.click()">打开 AET / Sprite</n-button></div>
     <AetTimeline :editor="e" />
-    <details v-if="progress" class="task-queue" data-testid="resource-progress"><summary><n-spin size="small" /> {{ progress.phase }} · {{ progress.done }}{{ progress.total ? ` / ${progress.total}` : ' 项（总量扫描中）' }}</summary><p>{{ progress.current }}</p></details>
+    <details v-if="progress" class="task-queue" data-testid="resource-progress"><summary><n-spin size="small" /> {{ progress.phase }} · {{ progress.done }}{{ progress.total ? ` / ${progress.total}` : ' 项（总量扫描中）' }}</summary><p>{{ progress.current }}</p><n-button v-if="progress.phase === '扫描目录' || progress.phase === '读取索引'" data-testid="cancel-scan" size="tiny" @click="scanController?.abort()">取消扫描</n-button></details>
     <div class="statusbar"><span>{{ e.doc.value?.name ?? 'No document' }} · {{ e.library.sets.length }} sprite sets · {{ e.library.entries.size }} sprite aliases</span><div class="spacer" /><span>{{ e.scene.value?.fps ?? 0 }} fps</span></div>
     <n-collapse v-if="warnings.length || e.notices.value.length" class="diagnostics"><n-collapse-item :title="`诊断 / Diagnostics (${warnings.length + e.notices.value.length})`" name="diagnostics"><div class="diagnostic-list"><p v-for="w in [...e.notices.value, ...warnings]" :key="w">{{ w }}</p></div></n-collapse-item></n-collapse>
   </div>

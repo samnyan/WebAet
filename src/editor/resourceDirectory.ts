@@ -21,15 +21,18 @@ export class ResourceDirectory {
   paths: string[] = []
   readonly root: FileSystemDirectoryHandle
   constructor(root: FileSystemDirectoryHandle) { this.root = root }
-  async scan(rescan: boolean, report: (progress: DirectoryProgress) => void) {
+  async scan(rescan: boolean, report: (progress: DirectoryProgress) => void, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     // A grant is always supplied by the user; cached paths never grant file access.
     if (!rescan) {
       const previous = await cached(this.root.name).catch(() => undefined)
+      signal?.throwIfAborted()
       if (previous && await this.root.isSameEntry(previous.root)) { this.paths = previous.paths; return }
     }
     const paths: string[] = []; let visited = 0
     const walk = async (dir: FileSystemDirectoryHandle, prefix: string) => {
       for await (const handle of (dir as unknown as { values(): AsyncIterable<FileSystemHandle> }).values()) {
+        signal?.throwIfAborted()
         const path = prefix + handle.name
         report({ phase: '扫描目录', current: path, done: ++visited, total: 0 })
         if (handle.kind === 'directory') await walk(handle as FileSystemDirectoryHandle, path + '/')
@@ -37,7 +40,7 @@ export class ResourceDirectory {
         if (visited % 100 === 0) await new Promise(resolve => setTimeout(resolve, 0))
       }
     }
-    await walk(this.root, ''); this.paths = paths.sort()
+    await walk(this.root, ''); signal?.throwIfAborted(); this.paths = paths.sort()
     await cached(this.root.name, { paths: this.paths, root: this.root }).catch(() => undefined)
   }
   async file(path: string): Promise<File> {
