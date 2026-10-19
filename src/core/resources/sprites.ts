@@ -47,20 +47,30 @@ export function decodeTexture(t: Texture): Uint8ClampedArray {
   if (t.chroma) {
     const lum = decodeBC5(v, w, h), c = t.chroma, chroma = decodeBC5(new DataView(c.data.buffer, c.data.byteOffset, c.data.byteLength), c.width, c.height)
     const out = new Uint8ClampedArray(w * h * 4)
-    const sample = (x: number, y: number, channel: number) => {
-      const fx = (x + 0.5) * c.width / w - 0.5, fy = (y + 0.5) * c.height / h - 0.5
-      const ix = Math.floor(fx), iy = Math.floor(fy), dx = fx - ix, dy = fy - iy
-      const at = (a: number, b: number) => chroma[(Math.max(0, Math.min(c.height - 1, b)) * c.width + Math.max(0, Math.min(c.width - 1, a))) * 4 + channel]! / 255
-      return (at(ix, iy) * (1 - dx) + at(ix + 1, iy) * dx) * (1 - dy) + (at(ix, iy + 1) * (1 - dx) + at(ix + 1, iy + 1) * dx) * dy
+    // Cache horizontal coordinates once; share interpolation geometry across
+    // Cb/Cr without changing arithmetic order or clamped edge sampling.
+    const left = new Int32Array(w), right = new Int32Array(w), weights = new Float64Array(w)
+    for (let x = 0; x < w; x++) {
+      const fx = (x + 0.5) * c.width / w - 0.5, ix = Math.floor(fx)
+      left[x] = Math.max(0, Math.min(c.width - 1, ix)) * 4
+      right[x] = Math.max(0, Math.min(c.width - 1, ix + 1)) * 4
+      weights[x] = fx - ix
     }
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const p = (y * w + x) * 4, l = lum[p]! / 255, cb = sample(x, y, 0) * 1.003922 - 0.503929, cr = sample(x, y, 1) * 1.003922 - 0.503929
-      // Direct clamped writes preserve conversion rounding without allocating
-      // a temporary four-element array for every decoded pixel.
-      out[p] = (l + 1.5748 * cr) * 255
-      out[p + 1] = (l - 0.1873 * cb - 0.4681 * cr) * 255
-      out[p + 2] = (l + 1.8556 * cb) * 255
-      out[p + 3] = lum[p + 1]!
+    for (let y = 0; y < h; y++) {
+      const fy = (y + 0.5) * c.height / h - 0.5, iy = Math.floor(fy), dy = fy - iy
+      const top = Math.max(0, Math.min(c.height - 1, iy)) * c.width * 4
+      const bottom = Math.max(0, Math.min(c.height - 1, iy + 1)) * c.width * 4
+      for (let x = 0; x < w; x++) {
+        const dx = weights[x]!, a = top + left[x]!, b = top + right[x]!, d = bottom + left[x]!, e = bottom + right[x]!
+        const cbSample = (chroma[a]! / 255 * (1 - dx) + chroma[b]! / 255 * dx) * (1 - dy) + (chroma[d]! / 255 * (1 - dx) + chroma[e]! / 255 * dx) * dy
+        const crSample = (chroma[a + 1]! / 255 * (1 - dx) + chroma[b + 1]! / 255 * dx) * (1 - dy) + (chroma[d + 1]! / 255 * (1 - dx) + chroma[e + 1]! / 255 * dx) * dy
+        const p = (y * w + x) * 4, l = lum[p]! / 255, cb = cbSample * 1.003922 - 0.503929, cr = crSample * 1.003922 - 0.503929
+        // Direct clamped writes avoid a temporary array per pixel.
+        out[p] = (l + 1.5748 * cr) * 255
+        out[p + 1] = (l - 0.1873 * cb - 0.4681 * cr) * 255
+        out[p + 2] = (l + 1.8556 * cb) * 255
+        out[p + 3] = lum[p + 1]!
+      }
     }
     return out
   }
