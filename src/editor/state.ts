@@ -35,7 +35,7 @@ export function createEditor() {
   function updateDirty() { dirty.value = JSON.stringify(doc.value?.scenes) !== savedScenes }
   function refresh() { version.value++; triggerRef(doc) }
   function edit(action: () => void) {
-    if (!doc.value) return
+    if (busy.value || !doc.value) return
     const before = snapshot()
     try {
       action()
@@ -44,8 +44,8 @@ export function createEditor() {
       historyVersion.value++; updateDirty(); refresh()
     } catch (e) { doc.value.scenes = before; refresh(); error.value = String(e) }
   }
-  function undo() { if (!doc.value || !undoStack.length) return; redoStack.push(snapshot()); doc.value.scenes = undoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
-  function redo() { if (!doc.value || !redoStack.length) return; undoStack.push(snapshot()); doc.value.scenes = redoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
+  function undo() { if (busy.value || !doc.value || !undoStack.length) return; redoStack.push(snapshot()); doc.value.scenes = undoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
+  function redo() { if (busy.value || !doc.value || !redoStack.length) return; undoStack.push(snapshot()); doc.value.scenes = redoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
   function selectScene(index: number) {
     sceneIndex.value = index; const s = doc.value?.scenes[index]
     compositionId.value = s?.compositions.at(-1)?.offset ?? 0; selectedId.value = null; frame.value = s?.start ?? 0; hidden.value = new Set()
