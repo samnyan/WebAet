@@ -17,7 +17,12 @@ const root = ref<ResourceDirectory>(), indexedPaths = ref<string[]>([]), progres
 const assets = computed(() => root.value ? indexedPaths.value.filter(p => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p)).map(p => ({ value: p, label: p })) : e.documents.value.map(d => ({ value: d.name, label: d.name })))
 async function importUserFiles(files: File[]) {
   if (e.busy.value) return
-  await e.importFiles(files)
+  loadController = new AbortController()
+  const signal = loadController.signal
+  try {
+    await e.importFiles(files, signal, (current, done, total) => { progress.value = { phase: '导入文件', current, done, total } })
+  } catch (err) { if (signal.aborted) e.notices.value.push('文件导入已取消；已加载的资源保留。'); else e.error.value = String(err) }
+  finally { loadController = undefined; progress.value = null }
 }
 async function filesChanged(event: Event) { const target = event.target as HTMLInputElement; if (target.files) await importUserFiles([...target.files]); target.value = '' }
 let scanController: AbortController | undefined

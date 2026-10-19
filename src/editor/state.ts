@@ -42,15 +42,16 @@ export function createEditor() {
   function open(bytes: Uint8Array, name: string) {
     const parsed = markRaw(parseAet(bytes, name)); doc.value = parsed; undoStack.length = 0; redoStack.length = 0; historyVersion.value++; markSaved(); selectScene(0); refresh()
   }
-  async function importFiles(files: File[], signal?: AbortSignal) {
+  async function importFiles(files: File[], signal?: AbortSignal, report?: (name: string, done: number, total: number) => void) {
     const projects = files.filter(file => /\.webaet$/i.test(file.name))
     if (projects.length > 1) { error.value = '一次只能打开一个 WebAet 工程；请分别导入。'; return }
     if (projects.length && dirty.value && !window.confirm('当前修改尚未保存，打开工程会丢弃修改。继续？')) return
     busy.value = true; error.value = ''; notices.value = []
     const incoming: { name: string; bytes: Uint8Array }[] = []
     try {
-      for (const file of files) {
+      for (const [index, file] of files.entries()) {
         signal?.throwIfAborted()
+        report?.(file.name, index, files.length)
         if (!/\.(bin|farc|webaet)$/i.test(file.name)) continue
         try {
           const bytes = new Uint8Array(await file.arrayBuffer())
