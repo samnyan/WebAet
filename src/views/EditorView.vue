@@ -6,6 +6,7 @@ import { createEditor } from '../editor/state'
 import { ResourceDirectory, type DirectoryProgress } from '../editor/resourceDirectory'
 import { parseSpriteDatabase, type SpriteDatabaseEntry } from '../core/resources/database'
 import { spriteDependencies } from '../core/resources/dependencies'
+import { unresolvedSpriteSources } from '../core/resources/audit'
 import LayerHierarchy from '../components/editor/LayerHierarchy.vue'
 import LayerInspector from '../components/editor/LayerInspector.vue'
 import AetStage from '../components/editor/AetStage.vue'
@@ -13,6 +14,8 @@ import AetTimeline from '../components/editor/AetTimeline.vue'
 import EditorStatusBar from '../components/editor/EditorStatusBar.vue'
 const e = createEditor(), { locale, t } = useI18n()
 const input = ref<HTMLInputElement>(), warnings = ref<string[]>([])
+const resourceWarnings = computed(() => { e.version.value; e.resourceVersion.value; return unresolvedSpriteSources(e.doc.value, e.library) })
+const allWarnings = computed(() => [...warnings.value, ...resourceWarnings.value])
 const scenes = computed(() => e.doc.value?.scenes.map((s, i) => ({ value: i, label: s.name })) ?? [])
 const root = ref<ResourceDirectory>(), indexedPaths = ref<string[]>([]), progress = ref<DirectoryProgress | null>(null)
 const assets = computed(() => root.value ? indexedPaths.value.filter(p => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p)).map(p => ({ value: p, label: p })) : e.documents.value.map(d => ({ value: d.name, label: d.name })))
@@ -96,6 +99,6 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
     <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LayerHierarchy :editor="e" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
     <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" :disabled="e.busy.value" @click="input?.click()">打开 AET / Sprite</n-button></div>
     <AetTimeline :editor="e" />
-    <EditorStatusBar :editor="e" :warnings="warnings" :progress="progress" @cancel="scanController?.abort(); loadController?.abort()" />
+    <EditorStatusBar :editor="e" :warnings="allWarnings" :progress="progress" @cancel="scanController?.abort(); loadController?.abort()" />
   </div>
 </template>
