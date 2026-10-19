@@ -10,7 +10,7 @@ import { observationMatrix, drawSpatialGuides } from '../../core/render/observat
 const { editor: e } = defineProps<{ editor: Editor }>()
 const emit = defineEmits<{ warnings: [warnings: string[]] }>()
 const canvas = ref<HTMLCanvasElement>(), host = ref<HTMLElement>(), zoom = ref(1), pan = ref({ x: 0, y: 0 }), wireframe = ref(false), isolate = ref(false)
-const perspective = ref(false)
+const perspective = ref(false), transparentExport = ref(false)
 const multipleBranches = computed(() => { e.version.value; return !isolate.value && (e.composition.value?.layers.filter(l => l.itemType === 3 && !!(l.flags & 1) && e.frame.value >= l.start && e.frame.value < l.end).length ?? 0) > 1 })
 const view3D = ref(false), yaw = ref(25), pitch = ref(-20)
 let resize: ResizeObserver, hits: HitArea[] = [], scale = 1, origin = { x: 0, y: 0 }, raf = 0
@@ -80,11 +80,11 @@ async function exportPreview(native = false) {
   try {
     let target = canvas.value
     if (native) {
-      const result = renderSceneFrame(e.scene.value, e.compositionId.value, e.frame.value, e.library)
+      const result = renderSceneFrame(e.scene.value, e.compositionId.value, e.frame.value, e.library, transparentExport.value)
       target = result.canvas
       e.notices.value = result.warnings.map(w => `场景 PNG: ${w}`)
     } else { cancelAnimationFrame(raf); raf = 0; draw() }
-    const name = `${e.doc.value!.name.replace(/\.bin$/i, '')}_${e.scene.value.name}_${native ? 'scene' : view3D.value ? '3d' : '2d'}_${e.frame.value.toFixed(2)}f.png`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    const name = `${e.doc.value!.name.replace(/\.bin$/i, '')}_${e.scene.value.name}_${native ? transparentExport.value ? 'scene-transparent' : 'scene' : view3D.value ? '3d' : '2d'}_${e.frame.value.toFixed(2)}f.png`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
     const blob = await new Promise<Blob>((resolve, reject) => target.toBlob(b => b ? resolve(b) : reject(new Error('PNG 编码失败')), 'image/png'))
     const url = URL.createObjectURL(blob)
     try { const link = document.createElement('a'); link.href = url; link.download = name; link.click() }
@@ -106,7 +106,7 @@ function reset() { yaw.value = 25; pitch.value = -20; zoom.value = 1; pan.value 
 </script>
 <template>
   <section class="stage-panel">
-    <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button><template v-if="view3D"><n-button data-testid="view-front" size="tiny" @click="preset(0, 0)">正面</n-button><n-button data-testid="view-right" size="tiny" @click="preset(90, 0)">右侧</n-button><n-button data-testid="view-top" size="tiny" @click="preset(0, -90)">顶面</n-button></template><n-checkbox v-if="view3D" data-testid="perspective" v-model:checked="perspective" size="small">透视（近似）</n-checkbox><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button data-testid="focus-selected" size="tiny" :disabled="e.selectedId.value === null" @click="focusSelected">聚焦选中</n-button><n-button data-testid="export-preview" size="tiny" :disabled="!e.scene.value || e.busy.value" title="保存当前视口，包含选框、辅助线和当前预览限制；不是游戏原生分辨率渲染" @click="e.runOperation('导出预览 PNG', () => exportPreview(false))">导出预览 PNG</n-button><n-button data-testid="export-scene" size="tiny" :disabled="!e.scene.value || e.busy.value" title="原始尺寸、当前合成和帧；忽略临时隐藏/隔离，无选框和辅助线，仍使用当前预览渲染器" @click="e.runOperation('导出场景 PNG', () => exportPreview(true))">场景 PNG</n-button><n-button size="tiny" @click="reset">适应画布</n-button></div>
+    <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button><template v-if="view3D"><n-button data-testid="view-front" size="tiny" @click="preset(0, 0)">正面</n-button><n-button data-testid="view-right" size="tiny" @click="preset(90, 0)">右侧</n-button><n-button data-testid="view-top" size="tiny" @click="preset(0, -90)">顶面</n-button></template><n-checkbox v-if="view3D" data-testid="perspective" v-model:checked="perspective" size="small">透视（近似）</n-checkbox><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button data-testid="focus-selected" size="tiny" :disabled="e.selectedId.value === null" @click="focusSelected">聚焦选中</n-button><n-button data-testid="export-preview" size="tiny" :disabled="!e.scene.value || e.busy.value" title="保存当前视口，包含选框、辅助线和当前预览限制；不是游戏原生分辨率渲染" @click="e.runOperation('导出预览 PNG', () => exportPreview(false))">导出预览 PNG</n-button><n-button data-testid="export-scene" size="tiny" :disabled="!e.scene.value || e.busy.value" title="原始尺寸、当前合成和帧；忽略临时隐藏/隔离，无选框和辅助线，仍使用当前预览渲染器" @click="e.runOperation('导出场景 PNG', () => exportPreview(true))">场景 PNG</n-button><n-checkbox data-testid="transparent-export" v-model:checked="transparentExport" :disabled="e.busy.value" size="small" title="仅影响原始尺寸场景 PNG，不改变 AET 场景颜色">透明底</n-checkbox><n-button size="tiny" @click="reset">适应画布</n-button></div>
     <div v-if="multipleBranches" class="branch-hint" data-testid="branch-hint">当前叠加多个子合成，可能包含游戏按状态单独调用的分支；此预览不模拟菜单状态。选择图层后开启 Isolate 可单独检查。<n-button size="tiny" :disabled="e.selectedId.value === null" @click="isolate = true">隔离选中分支</n-button></div>
     <div ref="host" class="stage-host"><canvas ref="canvas" data-testid="aet-stage" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="down = null" @wheel.prevent="wheelZoom" /></div>
     <footer>{{ view3D ? '3D 自由观察 · 左键拖动旋转 · 仅改变观察相机，不修改资源 · 尚无完整 AET 相机透视' : '2D · 拖动图层编辑位置' }} · 滚轮缩放 · 中键 / Alt 拖动平移 · 单击选择</footer>
