@@ -27,7 +27,7 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
         <label class="field"><span>混合</span><n-select size="tiny" :value="layer.video.blend" :options="blendOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.blend = v)" /></label>
         <p v-if="layer.video.extra" class="warning">3D 参数保留；当前画布使用 2D 投影。</p>
         <label class="field" data-testid="matte-mode"><span>轨道遮罩</span><n-select size="tiny" :value="layer.video.matte" :options="matteOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.matte = v)" /></label>
-        <p v-if="layer.video.matte" class="warning">与倒序绘制中的下一个精灵图层配对；跨合成遮罩尚不支持。亮度预览未验证游戏色彩空间一致性。</p>
+        <p v-if="layer.video.matte" class="warning">精灵遮罩沿递归倒序绘制与下一个精灵配对，可跨合成边界；合成层自身的遮罩标志不作为整组遮罩。亮度预览未验证游戏色彩空间一致性。</p>
       </div>
       <div v-if="layer.video?.extra" class="property-group"><b>3D 变换</b>
         <label v-for="ch in channels3D" :key="ch" class="field" :data-channel="ch"><span>{{ ch }}</span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'scaleZ' ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>

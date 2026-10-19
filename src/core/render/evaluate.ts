@@ -12,6 +12,8 @@ export function layerMatrix(layer: Layer, frame: number): Matrix {
 }
 export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null): Evaluation {
   const items: DrawItem[] = [], warnings = new Set<string>()
+  // AetObj keeps pending sprite state across recursive DispComp calls.
+  let pendingMatte: DrawItem | undefined
   const walk = (id: number, time: number, base: Matrix, alpha: number, path: number[], ancestors: Set<number>) => {
     if (ancestors.has(id)) { warnings.add('Composition cycle omitted'); return }
     const comp = scene.compositions.find(c => c.offset === id); if (!comp) return
@@ -22,9 +24,8 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       const p = comp.layers.find(x => x.offset === l.parent); if (!p) return identity()
       seen.add(p.offset); return multiply(parentMatrix(p, seen), layerMatrix(p, time))
     }
-    let pendingMatte: DrawItem | undefined
     for (const l of [...comp.layers].reverse()) {
-      if (isolated !== null && path.length === 0 && l.offset !== isolated) continue
+      if (isolated !== null && path.length === 0 && l.offset !== isolated && !pendingMatte) continue
       if (hidden.has(l.offset) || (!(l.flags & 1) && !pendingMatte) || time < l.start || time >= l.end) continue
       if (l.video?.extra) warnings.add('3D layers shown using their 2D transform; camera/perspective not applied')
       if (l.itemType === 2) { warnings.add('Audio playback is not supported'); continue }
@@ -32,7 +33,6 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       const opacity = alpha * (l.video ? Math.max(0, Math.min(1, sampleCurve(l.video.curves.opacity, time))) : 1)
       const local = (time - l.start) * l.timeScale + l.timeOffset, currentPath = [...path, l.offset]
       if (l.itemType === 3) {
-        if (pendingMatte || l.video?.matte) { warnings.add('Composition-spanning track mattes are not supported'); pendingMatte = undefined }
         walk(l.item, local, matrix, opacity, currentPath, next); continue
       }
       const video = scene.videos.find(v => v.offset === l.item)
@@ -44,8 +44,8 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       else if (item.matte) pendingMatte = item
       else items.push(item)
     }
-    if (pendingMatte) warnings.add(`Unpaired track matte: ${pendingMatte.layer.name}`)
   }
   walk(composition, frame, identity(), 1, [], new Set())
-  return { items, warnings: [...warnings] }
+  if (pendingMatte) warnings.add(`Unpaired track matte: ${pendingMatte.layer.name}`)
+  return { items: isolated === null ? items : items.filter(item => item.path[0] === isolated), warnings: [...warnings] }
 }
