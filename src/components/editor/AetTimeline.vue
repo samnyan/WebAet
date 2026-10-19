@@ -5,6 +5,7 @@ import type { Editor } from '../../editor/state'
 import { channels, channels3D, videoCurve, type EditableChannel, type Curve } from '../../core/aet/types'
 import { sampleCurve } from '../../core/animation/curves'
 import { markerSegments } from '../../core/animation/segments'
+import { retimeKeys } from '../../core/animation/retime'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const collapsed = ref(false), playing = ref(false), repeat = ref(true), channel = ref<EditableChannel>('positionX'), selectedKey = ref(-1), pixels = ref(3), height = ref(245)
 let raf = 0, last = 0
@@ -57,6 +58,11 @@ function addKey() {
     if (found >= 0) { selectedKey.value = found; return }
     c.keys.push({ frame, value, tangent: 0 }); c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.findIndex(k => k.frame === frame)
   })
+}
+const timeScale = ref(1), timeShift = ref(0)
+function retime() {
+  const target = curve.value; if (!target || target.keys.length < 2 || (e.selected.value!.flags & 32)) return
+  stop(); e.edit(() => { target.keys = retimeKeys(target.keys, timeScale.value, timeShift.value) }); selectedKey.value = -1
 }
 const copiedCurve = ref<{ channel: EditableChannel; keys: Curve['keys'] } | null>(null)
 function copyCurve() {
@@ -125,6 +131,7 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard) 
       <div class="key-editor"><span>{{ channel }}</span><n-button data-testid="copy-curve" size="tiny" :disabled="!curve" @click="copyCurve">复制曲线</n-button><n-button data-testid="paste-curve" size="tiny" :disabled="!curve || !copiedCurve || copiedCurve.channel !== channel || !!(e.selected.value!.flags & 32)" :title="copiedCurve ? `替换整条 ${copiedCurve.channel} 曲线（${copiedCurve.keys.length} 个键）` : '先复制同名轨道曲线'" @click="pasteCurve">替换曲线</n-button><n-button data-testid="previous-key" size="tiny" :disabled="previousKey < 0" @click="jumpKey(previousKey)">◀◆</n-button><n-button data-testid="next-key" size="tiny" :disabled="nextKey < 0" @click="jumpKey(nextKey)">◆▶</n-button><n-button data-testid="add-key" size="tiny" :disabled="!curve || !!(e.selected.value!.flags & 32)" @click="addKey">＋关键帧</n-button><n-button data-testid="delete-key" size="tiny" :disabled="!key || !!(e.selected.value!.flags & 32)" @click="deleteKey">删除</n-button>
         <template v-if="key"><label v-for="field in (['frame', 'value', 'tangent'] as const)" :key="field">{{ field }}<n-input-number :data-key-field="field" size="tiny" :value="key[field]" :show-button="false" :disabled="!!(e.selected.value!.flags & 32) || (field === 'frame' && curve!.keys.length === 1)" @update:value="editKey(field, $event)" /></label></template><span v-else class="muted">选择 ◆ 编辑时间 / 数值 / Hermite 切线，拖动 ◆ 改时间</span>
       </div>
+      <div class="key-editor"><span>整轨重定时（首键为轴）</span><label>时间倍率<n-input-number data-testid="retime-scale" size="tiny" v-model:value="timeScale" :min="0.001" :show-button="false" /></label><label>偏移 f<n-input-number data-testid="retime-shift" size="tiny" v-model:value="timeShift" :show-button="false" /></label><n-button data-testid="retime-apply" size="tiny" :disabled="!curve || curve.keys.length < 2 || !!(e.selected.value!.flags & 32)" @click="retime">应用重定时</n-button></div>
     </template>
   </section>
 </template>
