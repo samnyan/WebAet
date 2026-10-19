@@ -15,7 +15,11 @@ const input = ref<HTMLInputElement>(), warnings = ref<string[]>([])
 const scenes = computed(() => e.doc.value?.scenes.map((s, i) => ({ value: i, label: s.name })) ?? [])
 const root = ref<ResourceDirectory>(), indexedPaths = ref<string[]>([]), progress = ref<DirectoryProgress | null>(null)
 const assets = computed(() => root.value ? indexedPaths.value.filter(p => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p)).map(p => ({ value: p, label: p })) : e.documents.value.map(d => ({ value: d.name, label: d.name })))
-async function filesChanged(event: Event) { const target = event.target as HTMLInputElement; if (target.files) await e.importFiles([...target.files]); target.value = '' }
+async function importUserFiles(files: File[]) {
+  if (e.busy.value) return
+  await e.importFiles(files)
+}
+async function filesChanged(event: Event) { const target = event.target as HTMLInputElement; if (target.files) await importUserFiles([...target.files]); target.value = '' }
 let scanController: AbortController | undefined
 let loadController: AbortController | undefined
 async function pickDirectory(rescan = false) {
@@ -63,6 +67,7 @@ async function changeAsset(name: string) {
   finally { loadController = undefined; e.busy.value = false; progress.value = null }
 }
 function keydown(event: KeyboardEvent) {
+  if (e.busy.value) { if ((event.ctrlKey || event.metaKey) && ['s', 'z'].includes(event.key.toLowerCase())) event.preventDefault(); return }
   if ((event.ctrlKey || event.metaKey) && event.key === 's') { event.preventDefault(); e.saveProject(); return }
   if ((event.target as HTMLElement)?.closest('input,textarea,[contenteditable=true]')) return
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? e.redo() : e.undo() }
@@ -72,19 +77,19 @@ onMounted(() => { window.addEventListener('keydown', keydown); window.addEventLi
 onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 <template>
-  <div class="editor-shell" @dragover.prevent @drop.prevent="e.importFiles([...($event.dataTransfer?.files ?? [])])">
+  <div class="editor-shell" @dragover.prevent @drop.prevent="importUserFiles([...($event.dataTransfer?.files ?? [])])">
     <div class="app-toolbar"><strong>WebAet</strong><n-tag size="small" :bordered="false">Local</n-tag>
-      <n-button size="tiny" @click="input?.click()">{{ t('open') }}</n-button><n-button size="tiny" @click="pickDirectory(false)">选择资源目录</n-button><n-button v-if="root" size="tiny" :disabled="e.busy.value" @click="pickDirectory(true)">重新扫描</n-button>
-      <n-select class="asset-select" size="tiny" filterable :value="e.doc.value?.name" :options="assets" placeholder="AET" @update:value="changeAsset" />
-      <n-select class="scene-select" size="tiny" :value="e.sceneIndex.value" :options="scenes" placeholder="Scene" @update:value="e.selectScene" />
-      <div class="spacer" /><span v-if="e.dirty.value" class="dirty">●</span><n-button size="tiny" :disabled="!e.canUndo.value" @click="e.undo">撤销</n-button><n-button size="tiny" :disabled="!e.canRedo.value" @click="e.redo">重做</n-button>
-      <n-button size="tiny" :disabled="!e.doc.value" @click="e.saveProject">保存工程</n-button><n-button size="tiny" type="primary" :disabled="!e.doc.value" @click="e.exportBinary">导出 AET</n-button>
+      <n-button size="tiny" :disabled="e.busy.value" @click="input?.click()">{{ t('open') }}</n-button><n-button size="tiny" :disabled="e.busy.value" @click="pickDirectory(false)">选择资源目录</n-button><n-button v-if="root" size="tiny" :disabled="e.busy.value" @click="pickDirectory(true)">重新扫描</n-button>
+      <n-select class="asset-select" size="tiny" :disabled="e.busy.value" filterable :value="e.doc.value?.name" :options="assets" placeholder="AET" @update:value="changeAsset" />
+      <n-select class="scene-select" size="tiny" :disabled="e.busy.value" :value="e.sceneIndex.value" :options="scenes" placeholder="Scene" @update:value="e.selectScene" />
+      <div class="spacer" /><span v-if="e.dirty.value" class="dirty">●</span><n-button size="tiny" :disabled="e.busy.value || !e.canUndo.value" @click="e.undo">撤销</n-button><n-button size="tiny" :disabled="e.busy.value || !e.canRedo.value" @click="e.redo">重做</n-button>
+      <n-button size="tiny" :disabled="e.busy.value || !e.doc.value" @click="e.saveProject">保存工程</n-button><n-button size="tiny" type="primary" :disabled="e.busy.value || !e.doc.value" @click="e.exportBinary">导出 AET</n-button>
       <n-button size="tiny" @click="locale = locale === 'zh-CN' ? 'en' : 'zh-CN'">{{ t('language') }}</n-button>
     </div>
     <input ref="input" hidden type="file" multiple accept=".bin,.farc,.webaet" @change="filesChanged" />
     <n-alert v-if="e.error.value" type="error" closable @close="e.error.value = ''">{{ e.error.value }}</n-alert>
     <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LayerHierarchy :editor="e" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
-    <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" @click="input?.click()">打开 AET / Sprite</n-button></div>
+    <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" :disabled="e.busy.value" @click="input?.click()">打开 AET / Sprite</n-button></div>
     <AetTimeline :editor="e" />
     <details v-if="progress" class="task-queue" data-testid="resource-progress"><summary><n-spin size="small" /> {{ progress.phase }} · {{ progress.done }}{{ progress.total ? ` / ${progress.total}` : ' 项（总量扫描中）' }}</summary><p>{{ progress.current }}</p><n-button v-if="progress.phase === '扫描目录' || progress.phase === '读取索引'" data-testid="cancel-scan" size="tiny" @click="scanController?.abort()">取消扫描</n-button><n-button v-else data-testid="cancel-load" size="tiny" @click="loadController?.abort()">取消加载</n-button></details>
     <div class="statusbar"><span>{{ e.doc.value?.name ?? 'No document' }} · {{ e.library.sets.length }} sprite sets · {{ e.library.entries.size }} sprite aliases</span><div class="spacer" /><span>{{ e.scene.value?.fps ?? 0 }} fps</span></div>
