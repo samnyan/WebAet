@@ -4,8 +4,20 @@ import { NInput, NInputNumber, NCheckbox, NSelect, NButton } from 'naive-ui'
 import { channels, channels3D } from '../../core/aet/types'
 import type { Editor } from '../../editor/state'
 import SceneInspector from './SceneInspector.vue'
+import { canParent } from '../../core/animation/parenting'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const layer = computed(() => { e.version.value; return e.selected.value })
+const owner = computed(() => { e.version.value; return e.scene.value?.compositions.find(c => c.layers.some(l => l.offset === layer.value?.offset)) })
+const parentOptions = computed(() => {
+  e.version.value
+  const c = owner.value, l = layer.value
+  return [{ value: 0, label: '无 / None' }, ...(c && l ? c.layers.map(p => ({ value: p.offset, label: p.name, disabled: !canParent(c, l.offset, p.offset) })) : [])]
+})
+function parent(value: number) {
+  const c = owner.value, l = layer.value
+  if (!c || !l || (l.flags & 32) || !canParent(c, l.offset, value)) return
+  e.edit(() => l.parent = value)
+}
 const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
 function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) { if (value === null || !layer.value) return; e.edit(() => { layer.value![key] = value }) }
 const matteOptions = [{ value: 0, label: '无 / None' }, { value: 1, label: 'Alpha' }, { value: 2, label: '反相 Alpha' }, { value: 3, label: '亮度 / Luma' }, { value: 4, label: '反相亮度 / NotLuma' }]
@@ -21,7 +33,8 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
         <label class="field"><span>可见</span><n-checkbox :checked="!!(layer.flags & 1)" @update:checked="v => e.edit(() => layer!.flags = v ? layer!.flags | 1 : layer!.flags & ~1)" /></label>
         <label class="field"><span>锁定</span><n-checkbox :checked="!!(layer.flags & 32)" @update:checked="v => e.edit(() => layer!.flags = v ? layer!.flags | 32 : layer!.flags & ~32)" /></label>
         <label v-for="key in (['start', 'end', 'timeOffset', 'timeScale'] as const)" :key="key" class="field"><span>{{ key }}</span><n-input-number size="tiny" :value="layer[key]" :disabled="!!(layer.flags & 32)" :show-button="false" @update:value="numeric(key, $event)" /></label>
-        <p v-if="layer.parent">Parent: 0x{{ layer.parent.toString(16) }}</p>
+        <label class="field" data-testid="layer-parent"><span>父级</span><n-select size="tiny" filterable :value="layer.parent" :options="parentOptions" :disabled="!!(layer.flags & 32)" @update:value="parent" /></label>
+        <p class="muted">切换父级保留本地变换，不保持世界位置；禁止循环引用。</p>
         <n-button v-if="layer.itemType === 3" size="tiny" @click="e.compositionId.value = layer.item; e.selectedId.value = null">进入合成 ↳</n-button>
       </div>
       <div v-if="layer.video" class="property-group"><b>变换 · {{ e.frame.value.toFixed(1) }} f</b>
