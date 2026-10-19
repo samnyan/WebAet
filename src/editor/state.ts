@@ -103,9 +103,12 @@ export function createEditor() {
   function exportBinary() { if (!doc.value) return; try { const bytes = writeAet(doc.value); download(bytes, doc.value.name); error.value = '' } catch (e) { error.value = String(e) } }
   function saveProject() {
     if (!doc.value) return
-    let binary = ''; for (const b of doc.value.source) binary += String.fromCharCode(b)
-    download(new TextEncoder().encode(JSON.stringify({ format: 'webaet-project', version: 1, name: doc.value.name, source: btoa(binary), scenes: doc.value.scenes, view: { sceneIndex: sceneIndex.value, compositionId: compositionId.value, frame: frame.value } })), doc.value.name.replace(/\.bin$/i, '') + '.webaet')
-    dirty.value = false
+    try {
+      writeAet(doc.value) // A saved draft must pass the same validation as project reload.
+      let binary = ''; for (const b of doc.value.source) binary += String.fromCharCode(b)
+      download(new TextEncoder().encode(JSON.stringify({ format: 'webaet-project', version: 1, name: doc.value.name, source: btoa(binary), scenes: doc.value.scenes, view: { sceneIndex: sceneIndex.value, compositionId: compositionId.value, frame: frame.value } })), doc.value.name.replace(/\.bin$/i, '') + '.webaet')
+      dirty.value = false; error.value = ''
+    } catch (err) { error.value = String(err) }
   }
   function loadProject(text: string) {
     const project = JSON.parse(text)
