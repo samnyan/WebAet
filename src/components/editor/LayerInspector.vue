@@ -25,13 +25,13 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
       <div v-if="layer.video" class="property-group"><b>变换 · {{ e.frame.value.toFixed(1) }} f</b>
         <label v-for="ch in channels" :key="ch" class="field" :data-channel="ch"><span :title="ch">{{ labels[ch] }} <small v-if="layer.video.curves[ch].keys.length > 1">◆</small></span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'opacity' || ch.startsWith('scale') ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
         <label class="field"><span>混合</span><n-select size="tiny" :value="layer.video.blend" :options="blendOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.blend = v)" /></label>
-        <p v-if="layer.video.extra" class="warning">3D 参数保留；当前画布使用 2D 投影。</p>
+        <p v-if="layer.video.extra" class="warning">3D 变换使用正交投影预览，不包含相机透视。</p>
         <label class="field" data-testid="matte-mode"><span>轨道遮罩</span><n-select size="tiny" :value="layer.video.matte" :options="matteOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.matte = v)" /></label>
         <p v-if="layer.video.matte" class="warning">精灵遮罩沿递归倒序绘制与下一个精灵配对，可跨合成边界；合成层自身的遮罩标志不作为整组遮罩。亮度预览未验证游戏色彩空间一致性。</p>
       </div>
       <div v-if="layer.video?.extra" class="property-group"><b>3D 变换</b>
         <label v-for="ch in channels3D" :key="ch" class="field" :data-channel="ch"><span>{{ ch }}</span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'scaleZ' ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
-        <p class="warning">3D 曲线可编辑并导出；画布尚未应用相机 / 透视。</p>
+        <p class="warning">3D 曲线参与父子矩阵计算并可导出；画布尚未应用相机 / 透视。</p>
       </div>
       <div v-if="layer.markers.length" class="property-group"><b>Markers</b>
         <div v-for="m in layer.markers" :key="m.offset" class="marker-editor" :data-marker="m.offset">
