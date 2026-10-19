@@ -66,6 +66,12 @@ A subsequent mounted-editor smoke check imported the original AET/FARC/database 
 
 A browser-generated edited copy of the original menu AET was loaded independently with MikuMikuLibrary (net8.0, native Linux). The character-01 layer reached from ROOT composition index 93 is stored in composition index 54, layer index 0 (`nswgam_menu_chara_mainmenu_01.pic`). Its position-X key changed from 715 to 735. MikuMikuLibrary confirmed the expected frame/value/tangent, one key, and unchanged scene/composition counts (1 / 94). The native C# checker and edited binary were temporary and removed after execution. This verifies independent readability of this edit, not game execution or universal writer compatibility.
 
+## Source-less placeholder occlusion fix
+
+A mounted frame-30 inspection revealed large opaque red/yellow/cyan/magenta rectangles overlapping the character and menu. These were source-less `p_menu_list*` video layers, not missing textured sprites. ReDIVA `src/CRE/auth_2d.cpp:1372–1432` routes zero-source videos through `DispSprite`, which looks up `layer->name` in the runtime sprite map and returns if absent; it does not render the stored RGB as an opaque solid.
+
+The evaluator now omits zero-source videos with a deduplicated runtime-binding diagnostic. This changes preview evaluation only, not serialized data. All six selected characters remain present at frames 30/60; draw counts are now 74/54 instead of 92/56, with no zero-source draw items and no document dirty state. Mounted screenshot review confirms the character remains visible; green/purple background bands and overlapping menu choices remain, so removal of placeholders does not establish full controller emulation or game parity. Earlier counts/hashes and performance measurements above describe the pre-fix baseline, not current output. TypeScript checking passed.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.

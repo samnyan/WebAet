@@ -52,6 +52,10 @@ function evaluateIndexed(scene: Scene, compositions: Map<number, Composition>, v
       }
       const video = videos.get(l.item)
       if (!video || (opacity <= 0 && !pendingMatte && !l.video?.matte)) continue
+      // DispVideo routes source-less layers to DispSprite's runtime name map.
+      // Their stored RGB is authoring metadata, not a drawable solid rectangle.
+      // No runtime bindings are available in a raw editor document.
+      if (!video.sources.length) { warnings.add('Source-less video layers require game runtime sprite bindings; omitted'); continue }
       if (video.sources.length > 1 && (l.flags & 8)) warnings.add('Sprite sequence motion blur is not applied')
       // DispVideo adds an epsilon, then converts to int32 (truncation, not floor).
       // Out-of-range source access is not emulated: omit safely instead of inventing a held frame.
