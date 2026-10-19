@@ -35,5 +35,5 @@ export class SpriteLibrary {
     }
     return canvas
   }
-  clear() { this.entries.clear(); this.canvases.clear(); this.sets.length = 0 }
+  clear() { this.entries.clear(); this.ids.clear(); this.database = []; this.canvases.clear(); this.sets.length = 0 }
 }

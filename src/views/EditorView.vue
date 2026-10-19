@@ -3,31 +3,56 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { NButton, NSelect, NAlert, NSpin, NTag, NCollapse, NCollapseItem } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { createEditor } from '../editor/state'
+import { ResourceDirectory, type DirectoryProgress } from '../editor/resourceDirectory'
+import { parseSpriteDatabase } from '../core/resources/database'
 import LayerHierarchy from '../components/editor/LayerHierarchy.vue'
 import LayerInspector from '../components/editor/LayerInspector.vue'
 import AetStage from '../components/editor/AetStage.vue'
 import AetTimeline from '../components/editor/AetTimeline.vue'
 const e = createEditor(), { locale, t } = useI18n()
-const input = ref<HTMLInputElement>(), directory = ref<HTMLInputElement>(), warnings = ref<string[]>([])
+const input = ref<HTMLInputElement>(), warnings = ref<string[]>([])
 const scenes = computed(() => e.doc.value?.scenes.map((s, i) => ({ value: i, label: s.name })) ?? [])
-const assets = computed(() => e.documents.value.map(d => ({ value: d.name, label: d.name })))
+const root = ref<ResourceDirectory>(), indexedPaths = ref<string[]>([]), progress = ref<DirectoryProgress | null>(null)
+const assets = computed(() => root.value ? indexedPaths.value.filter(p => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p)).map(p => ({ value: p, label: p })) : e.documents.value.map(d => ({ value: d.name, label: d.name })))
 async function filesChanged(event: Event) { const target = event.target as HTMLInputElement; if (target.files) await e.importFiles([...target.files]); target.value = '' }
-async function pickDirectory() {
+async function pickDirectory(rescan = false) {
+  if (e.busy.value) return
   const picker = (window as unknown as { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker
-  if (!picker) { directory.value?.click(); return }
+  if (!picker) { e.error.value = '此浏览器不支持目录句柄；请用 Chromium 选择资源目录，单文件导入仍可用。'; return }
   try {
-    const root = await picker(), files: File[] = []
-    async function walk(dir: FileSystemDirectoryHandle) {
-      for await (const handle of (dir as unknown as { values: () => AsyncIterable<FileSystemHandle> }).values()) {
-        if (handle.kind === 'directory') await walk(handle as FileSystemDirectoryHandle)
-        else if (/^(aet_|spr_).*\.(bin|farc)$/i.test(handle.name) && !/^aet_db/i.test(handle.name)) files.push(await (handle as FileSystemFileHandle).getFile())
-      }
-    }
-    e.busy.value = true; await walk(root); await e.importFiles(files)
+    const selected = rescan && root.value ? root.value.root : await picker()
+    e.busy.value = true; progress.value = { phase: '读取索引', current: selected.name, done: 0, total: 0 }
+    const index = new ResourceDirectory(selected)
+    await index.scan(rescan, p => { progress.value = p })
+    root.value = index; indexedPaths.value = index.paths
   } catch (err) { if ((err as Error).name !== 'AbortError') e.error.value = String(err) }
-  finally { e.busy.value = false }
+  finally { e.busy.value = false; progress.value = null }
 }
-function changeAsset(name: string) { if (e.dirty.value && !window.confirm('当前修改尚未保存，切换资源会丢弃修改。继续？')) return; const asset = e.documents.value.find(d => d.name === name); if (asset) { try { e.open(asset.bytes, name) } catch (err) { e.error.value = String(err) } } }
+async function changeAsset(name: string) {
+  if (e.busy.value || e.dirty.value && !window.confirm('当前修改尚未保存，切换资源会丢弃修改。继续？')) return
+  if (!root.value) { const asset = e.documents.value.find(d => d.name === name); if (asset) { try { e.open(asset.bytes, name) } catch (err) { e.error.value = String(err) } }; return }
+  e.busy.value = true
+  try {
+    progress.value = { phase: '加载 AET', current: name, done: 0, total: 0 }
+    const file = await root.value.file(name), bytes = new Uint8Array(await file.arrayBuffer())
+    e.open(bytes, name); e.library.clear(); e.documents.value = []; e.resourceVersion.value++
+    const sourceIds = new Set(e.doc.value!.scenes.flatMap(s => s.videos.flatMap(v => v.sources.map(s => s.id))))
+    const dbPaths = root.value.companions(name, new Set(['spr_db.bin']))
+    const needed = new Set<string>([file.name.replace(/^aet_/i, 'spr_').replace(/\.bin$/i, '.farc').toLowerCase()])
+    for (const path of dbPaths) {
+      const dbFile = await root.value.file(path), entries = parseSpriteDatabase(new Uint8Array(await dbFile.arrayBuffer()))
+      for (const entry of entries) if (sourceIds.has(entry.id)) needed.add(entry.set.replace(/\.bin$/i, '.farc'))
+      await e.importFiles([dbFile])
+    }
+    const paths = root.value.companions(name, needed)
+    for (let i = 0; i < paths.length; i++) {
+      progress.value = { phase: '加载 Sprite', current: paths[i]!, done: i, total: paths.length }
+      await e.importFiles([await root.value.file(paths[i]!)])
+      e.busy.value = true
+    }
+  } catch (err) { e.error.value = String(err) }
+  finally { e.busy.value = false; progress.value = null }
+}
 function keydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key === 's') { event.preventDefault(); e.saveProject(); return }
   if ((event.target as HTMLElement)?.closest('input,textarea,[contenteditable=true]')) return
@@ -40,19 +65,25 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
 <template>
   <div class="editor-shell" @dragover.prevent @drop.prevent="e.importFiles([...($event.dataTransfer?.files ?? [])])">
     <div class="app-toolbar"><strong>WebAet</strong><n-tag size="small" :bordered="false">Local</n-tag>
-      <n-button size="tiny" @click="input?.click()">{{ t('open') }}</n-button><n-button size="tiny" @click="pickDirectory">打开目录</n-button>
+      <n-button size="tiny" @click="input?.click()">{{ t('open') }}</n-button><n-button size="tiny" @click="pickDirectory(false)">选择资源目录</n-button><n-button v-if="root" size="tiny" :disabled="e.busy.value" @click="pickDirectory(true)">重新扫描</n-button>
       <n-select class="asset-select" size="tiny" filterable :value="e.doc.value?.name" :options="assets" placeholder="AET" @update:value="changeAsset" />
       <n-select class="scene-select" size="tiny" :value="e.sceneIndex.value" :options="scenes" placeholder="Scene" @update:value="e.selectScene" />
       <div class="spacer" /><span v-if="e.dirty.value" class="dirty">●</span><n-button size="tiny" :disabled="!e.canUndo.value" @click="e.undo">撤销</n-button><n-button size="tiny" :disabled="!e.canRedo.value" @click="e.redo">重做</n-button>
       <n-button size="tiny" :disabled="!e.doc.value" @click="e.saveProject">保存工程</n-button><n-button size="tiny" type="primary" :disabled="!e.doc.value" @click="e.exportBinary">导出 AET</n-button>
       <n-button size="tiny" @click="locale = locale === 'zh-CN' ? 'en' : 'zh-CN'">{{ t('language') }}</n-button>
     </div>
-    <input ref="input" hidden type="file" multiple accept=".bin,.farc,.webaet" @change="filesChanged" /><input ref="directory" hidden type="file" webkitdirectory multiple @change="filesChanged" />
+    <input ref="input" hidden type="file" multiple accept=".bin,.farc,.webaet" @change="filesChanged" />
     <n-alert v-if="e.error.value" type="error" closable @close="e.error.value = ''">{{ e.error.value }}</n-alert>
     <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LayerHierarchy :editor="e" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
-    <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>拖入 aet_*.bin 与 spr_*.farc，或打开资源目录。全部解析与编辑在浏览器本地完成。</p><n-button type="primary" @click="input?.click()">打开 AET / Sprite</n-button></div>
+    <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" @click="input?.click()">打开 AET / Sprite</n-button></div>
     <AetTimeline :editor="e" />
+    <details v-if="progress" class="task-queue" data-testid="resource-progress"><summary><n-spin size="small" /> {{ progress.phase }} · {{ progress.done }}{{ progress.total ? ` / ${progress.total}` : ' 项（总量扫描中）' }}</summary><p>{{ progress.current }}</p></details>
     <div class="statusbar"><span>{{ e.doc.value?.name ?? 'No document' }} · {{ e.library.sets.length }} sprite sets · {{ e.library.entries.size }} sprite aliases</span><div class="spacer" /><span>{{ e.scene.value?.fps ?? 0 }} fps</span></div>
     <n-collapse v-if="warnings.length || e.notices.value.length" class="diagnostics"><n-collapse-item :title="`诊断 / Diagnostics (${warnings.length + e.notices.value.length})`" name="diagnostics"><div class="diagnostic-list"><p v-for="w in [...e.notices.value, ...warnings]" :key="w">{{ w }}</p></div></n-collapse-item></n-collapse>
   </div>
 </template>
+<style scoped>
+.task-queue { position: fixed; right: 16px; bottom: 28px; z-index: 100; max-width: min(600px, 80vw); padding: 10px; background: #252930; border: 1px solid #52606d; border-radius: 6px; }
+.task-queue summary { cursor: pointer; }
+.task-queue p { overflow-wrap: anywhere; }
+</style>
