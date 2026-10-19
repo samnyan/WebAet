@@ -97,6 +97,14 @@ Inspected `app::Layout::CreateDisplayNode` at `0x14028D560`. Its final parameter
 
 Original asset readback in Chromium found all six character branches in scene 0 / ROOT composition index 93 share the following marker frames: `st_in=0`, `ed_in=10`, `st_lp=11`, `ed_lp=1488`, `st_out=1489`, `ed_out=1499`. Each parent layer spans [0,1500), with time offset 0 and scale 1. These are stored marker coordinates; the builder evidence supports entrance-to-loop selection, but exact endpoint wrapping still requires following the AET object's flag/marker consumption. No guessed modulo, shared-clock reset or label-state filtering was implemented.
 
+## Playback parameter application and loop-start override
+
+Further call-chain inspection narrows the earlier "node recreation" wording: `app::Layout::AddChild` moves builder fields into the layout descriptor; `0x140660090` calls `Layout_RegisterSprite` with the existing handle at +352. `0x1402921E0` looks up a nonzero handle, initializes a temporary AET object and copies its state into the existing object. This path reapplies playback parameters; it is not evidence of unconditional handle destruction/new-object allocation.
+
+`0x1402912F0` resolves all three supplied marker strings. After virtual initialization with the start/end markers, a supplied third marker overwrites the object's start-time field at +32. Thus mode 2 resolves `st_in`/`ed_lp` for initialization, then applies `st_lp` as the subsequent start boundary. Exact MegaMix frame-step behavior still needs direct inspection before claiming a complete simulation.
+
+Separately, ReDIVA `AetObj::Init`/`StepFrame` (`auth_2d.cpp:1012–1183`) initializes the frame from the selected boundary, treats marker end time as inclusive, and on forward loop overflow assigns the start time directly, discarding overshoot rather than taking modulo. Its reverse loop similarly assigns the end boundary. This is reference-source evidence, not confirmation that every MegaMix flag has identical behavior. No controller simulation was added on this evidence alone.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
