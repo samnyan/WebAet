@@ -62,6 +62,10 @@ AE UX files were concurrently under reconstruction and were left untouched.
 
 A subsequent mounted-editor smoke check imported the original AET/FARC/database using the actual file input. In composition index 93 at frame 30, the character-01 layer position-X changed from 715 to 735 through the mounted editor's action entry point. Undo restored 715 and redo restored 735. Clicking the actual Export AET toolbar button produced a browser download; reopening those downloaded bytes through the mounted editor preserved 735, reset dirty state, retained the loaded sprite set and reported no editor error. This covers mounted-state/action history and the actual binary-download route, not pointer-level property-panel interaction. The UX files were still uncommitted during this check, so final post-integration UX acceptance remains pending.
 
+## Independent edited-binary readback
+
+A browser-generated edited copy of the original menu AET was loaded independently with MikuMikuLibrary (net8.0, native Linux). The character-01 layer reached from ROOT composition index 93 is stored in composition index 54, layer index 0 (`nswgam_menu_chara_mainmenu_01.pic`). Its position-X key changed from 715 to 735. MikuMikuLibrary confirmed the expected frame/value/tangent, one key, and unchanged scene/composition counts (1 / 94). The native C# checker and edited binary were temporary and removed after execution. This verifies independent readability of this edit, not game execution or universal writer compatibility.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
