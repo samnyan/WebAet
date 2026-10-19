@@ -27,7 +27,10 @@ export class SpriteLibrary {
     let canvas = this.canvases.get(texture)
     if (!canvas) {
       canvas = document.createElement('canvas'); canvas.width = texture.width; canvas.height = texture.height
-      const ctx = canvas.getContext('2d')!; ctx.putImageData(new ImageData(new Uint8ClampedArray(decodeTexture(texture)), texture.width, texture.height), 0, 0)
+      // Sprite rectangles use a top-left atlas origin, unlike raw TXP rows.
+      const decoded = decodeTexture(texture), pixels = new Uint8ClampedArray(decoded.length), stride = texture.width * 4
+      for (let y = 0; y < texture.height; y++) pixels.set(decoded.subarray(y * stride, (y + 1) * stride), (texture.height - 1 - y) * stride)
+      const ctx = canvas.getContext('2d')!; ctx.putImageData(new ImageData(pixels, texture.width, texture.height), 0, 0)
       this.canvases.set(texture, canvas)
     }
     return canvas
