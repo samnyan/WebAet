@@ -11,11 +11,13 @@ function eye(index: number, value: number | null) {
 const { editor: e } = defineProps<{ editor: Editor }>()
 function number(key: 'width' | 'height' | 'fps' | 'start' | 'end', value: number | null) {
   const scene = e.scene.value
-  if (!scene || value === null || !Number.isFinite(value)) return
-  if ((key === 'width' || key === 'height') && (!Number.isInteger(value) || value < 1 || value > 65535)) return
-  if (key === 'fps' && value <= 0) return
-  if (key === 'start' && value >= scene.end || key === 'end' && value <= scene.start) return
-  e.edit(() => scene[key] = value)
+  if (!scene || value === null) return
+  const encoded = Math.fround(value)
+  if (!Number.isFinite(encoded)) { e.error.value = '场景参数必须是有限 float32'; return }
+  if ((key === 'width' || key === 'height') && (!Number.isInteger(value) || value < 1 || value > 65535)) { e.error.value = '场景尺寸必须是 1–65535 的整数'; return }
+  if (key === 'fps' && encoded <= 0) { e.error.value = '场景帧率必须在 float32 精度下大于零'; return }
+  if (key === 'start' && encoded >= Math.fround(scene.end) || key === 'end' && encoded <= Math.fround(scene.start)) { e.error.value = '场景时间范围必须在 float32 精度下 start < end'; return }
+  e.edit(() => scene[key] = encoded)
 }
 </script>
 <template>
