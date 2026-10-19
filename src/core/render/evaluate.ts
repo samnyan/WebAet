@@ -6,7 +6,7 @@ export interface Evaluation { items: DrawItem[]; warnings: string[] }
 export function layerMatrix(layer: Layer, frame: number): Matrix {
   return orthographicMatrix(layerMatrix4(layer, frame))
 }
-export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null): Evaluation {
+export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4()): Evaluation {
   const items: DrawItem[] = [], warnings = new Set<string>()
   // AetObj keeps pending sprite state across recursive DispComp calls.
   let pendingMatte: DrawItem | undefined
@@ -34,7 +34,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       const video = scene.videos.find(v => v.offset === l.item)
       if (!video || (opacity <= 0 && !pendingMatte && !l.video?.matte)) continue
       const source = video.sources[Math.max(0, Math.min(video.sources.length - 1, Math.floor(local * video.frames)))]
-      const item: DrawItem = { layer: l, path: currentPath, matrix: orthographicMatrix(matrix), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
+      const item: DrawItem = { layer: l, path: currentPath, matrix: orthographicMatrix(multiply4(view, matrix)), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
       // Runtime draws back-to-front: a matte-tagged source is retained, then masked by the next sprite.
       if (pendingMatte) { pendingMatte.mask = item; items.push(pendingMatte); pendingMatte = undefined }
       else if (item.matte) pendingMatte = item
