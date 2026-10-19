@@ -117,8 +117,10 @@ function makeConstant() {
 function deleteKey() { const c = curve.value; if (!c || selectedKey.value < 0 || (e.selected.value!.flags & 32)) return; e.edit(() => c.keys.splice(selectedKey.value, 1)); selectedKey.value = -1 }
 function editKey(field: 'frame' | 'value' | 'tangent', value: number | null) {
   const c = curve.value, k = c?.keys[selectedKey.value]; if (!c || !k || value === null || (e.selected.value!.flags & 32)) return
-  if (field === 'frame' && c.keys.some(other => other !== k && other.frame === value)) { e.error.value = '关键帧时间不能重复'; return }
-  e.edit(() => { k[field] = value; c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.indexOf(k) })
+  const encoded = Math.fround(value)
+  if (!Number.isFinite(encoded)) { e.error.value = '关键帧参数必须是有限 float32'; return }
+  if (field === 'frame' && c.keys.some(other => other !== k && Math.fround(other.frame) === encoded)) { e.error.value = '关键帧时间在 float32 精度下不能重复'; return }
+  e.edit(() => { k[field] = encoded; c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.indexOf(k) })
 }
 function chooseKey(ch: EditableChannel, index: number, c: Curve) { channel.value = ch; selectedKey.value = index; scrub(c.keys[index]!.frame) }
 function dragKey(event: PointerEvent, ch: EditableChannel, index: number, c: Curve) {
