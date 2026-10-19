@@ -6,6 +6,19 @@ export class SpriteLibrary {
   private database: SpriteDatabaseEntry[] = []
   private canvases = new Map<Texture, HTMLCanvasElement>()
   readonly sets: SpriteSet[] = []
+  private decodedBytes = 0
+  readonly decodedBudget: number
+  constructor(decodedBudget = 128 * 1024 * 1024) {
+    if (!Number.isFinite(decodedBudget) || decodedBudget < 0) throw new Error('Invalid texture cache budget')
+    this.decodedBudget = decodedBudget
+  }
+  get cacheStats() { return { textures: this.canvases.size, bytes: this.decodedBytes, budget: this.decodedBudget } }
+  private release(texture: Texture) {
+    const canvas = this.canvases.get(texture)
+    if (!canvas) return
+    this.decodedBytes -= canvas.width * canvas.height * 4
+    this.canvases.delete(texture); canvas.width = canvas.height = 0
+  }
   add(set: SpriteSet) {
     const previous = this.sets.findIndex(s => s.name.toLowerCase() === set.name.toLowerCase())
     if (previous >= 0) this.sets.splice(previous, 1)
@@ -25,15 +38,19 @@ export class SpriteLibrary {
   find(name: string, id?: number) { return (id === undefined ? undefined : this.ids.get(id)) ?? this.entries.get(name.toUpperCase()) }
   image(texture: Texture) {
     let canvas = this.canvases.get(texture)
+    if (canvas) { this.canvases.delete(texture); this.canvases.set(texture, canvas) }
     if (!canvas) {
+      const bytes = texture.width * texture.height * 4
+      // Keep at most one oversized texture to avoid decoding it for every sprite.
+      while (this.canvases.size && this.decodedBytes + bytes > this.decodedBudget) this.release(this.canvases.keys().next().value!)
       canvas = document.createElement('canvas'); canvas.width = texture.width; canvas.height = texture.height
       // Sprite rectangles use a top-left atlas origin, unlike raw TXP rows.
       const decoded = decodeTexture(texture), pixels = new Uint8ClampedArray(decoded.length), stride = texture.width * 4
       for (let y = 0; y < texture.height; y++) pixels.set(decoded.subarray(y * stride, (y + 1) * stride), (texture.height - 1 - y) * stride)
       const ctx = canvas.getContext('2d')!; ctx.putImageData(new ImageData(pixels, texture.width, texture.height), 0, 0)
-      this.canvases.set(texture, canvas)
+      this.canvases.set(texture, canvas); this.decodedBytes += bytes
     }
     return canvas
   }
-  clear() { this.entries.clear(); this.ids.clear(); this.database = []; this.canvases.clear(); this.sets.length = 0 }
+  clear() { this.entries.clear(); this.ids.clear(); this.database = []; for (const texture of [...this.canvases.keys()]) this.release(texture); this.sets.length = 0 }
 }
