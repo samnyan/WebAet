@@ -44,8 +44,9 @@ export class SpriteLibrary {
   bindDatabase(entries: SpriteDatabaseEntry[]) { this.database = entries; this.rebuildEntries() }
   private resolveIds() {
     this.ids.clear()
+    const sets = new Map(this.sets.map(set => [set.name.toLowerCase(), set]))
     for (const entry of this.database) {
-      const set = this.sets.find(s => s.name.toLowerCase() === entry.set), sprite = set?.sprites[entry.index], texture = sprite && set?.textures[sprite.texture]
+      const set = sets.get(entry.set.toLowerCase()), sprite = set?.sprites[entry.index], texture = sprite && set?.textures[sprite.texture]
       if (sprite && texture) { this.ids.set(entry.id, { sprite, texture }); for (const alias of spriteAliases(entry.name)) this.entries.set(alias, { sprite, texture }) }
     }
   }
