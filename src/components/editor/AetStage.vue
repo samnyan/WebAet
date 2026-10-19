@@ -4,21 +4,12 @@ import { NButton, NCheckbox } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import { evaluateScene } from '../../core/render/evaluate'
 import { drawItems, hitTest, type HitArea } from '../../core/render/canvas'
-import { identity, multiply, type Matrix } from '../../core/animation/curves'
-import { layerMatrix } from '../../core/render/evaluate'
-import { identity4, multiply4, type Matrix4 } from '../../core/animation/transform3d'
+import { identity4, multiply4, layerMatrix4, orthographicMatrix } from '../../core/animation/transform3d'
+import { observationMatrix, drawSpatialGuides } from '../../core/render/observation'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const emit = defineEmits<{ warnings: [warnings: string[]] }>()
 const canvas = ref<HTMLCanvasElement>(), host = ref<HTMLElement>(), zoom = ref(1), pan = ref({ x: 0, y: 0 }), wireframe = ref(false), isolate = ref(false)
 const view3D = ref(false), yaw = ref(25), pitch = ref(-20)
-function observationMatrix(width: number, height: number): Matrix4 {
-  const y = yaw.value * Math.PI / 180, x = pitch.value * Math.PI / 180
-  const cy = Math.cos(y), sy = Math.sin(y), cx = Math.cos(x), sx = Math.sin(x)
-  const ry = [cy, 0, -sy, 0, 0, 1, 0, 0, sy, 0, cy, 0, 0, 0, 0, 1]
-  const rx = [1, 0, 0, 0, 0, cx, sx, 0, 0, -sx, cx, 0, 0, 0, 0, 1]
-  const center = identity4(), back = identity4(); center[12] = -width / 2; center[13] = -height / 2; back[12] = width / 2; back[13] = height / 2
-  return multiply4(back, multiply4(rx, multiply4(ry, center)))
-}
 let resize: ResizeObserver, hits: HitArea[] = [], scale = 1, origin = { x: 0, y: 0 }, raf = 0
 function draw() {
   const c = canvas.value, bounds = host.value?.getBoundingClientRect(); if (!c || !bounds) return
@@ -28,11 +19,13 @@ function draw() {
   scale = Math.min((bounds.width - 48) / s.width, (bounds.height - 48) / s.height) * zoom.value
   origin = { x: (bounds.width - s.width * scale) / 2 + pan.value.x, y: (bounds.height - s.height * scale) / 2 + pan.value.y }
   ctx.translate(origin.x, origin.y); ctx.scale(scale, scale)
-  ctx.fillStyle = `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`; ctx.fillRect(0, 0, s.width, s.height)
+  if (!view3D.value) { ctx.fillStyle = `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`; ctx.fillRect(0, 0, s.width, s.height) }
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, s.width, s.height); if (!view3D.value) ctx.clip()
-  const evaluated = evaluateScene(s, e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height) : identity4())
+  const evaluated = evaluateScene(s, e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height, yaw.value, pitch.value) : identity4())
   const result = drawItems(ctx, evaluated.items, e.library, e.selectedId.value, wireframe.value); hits = result.hits
-  ctx.restore(); ctx.strokeStyle = '#5a6370'; ctx.lineWidth = 1 / scale; ctx.strokeRect(0, 0, s.width, s.height)
+  ctx.restore()
+  if (view3D.value) drawSpatialGuides(ctx, observationMatrix(s.width, s.height, yaw.value, pitch.value), s.width, s.height, scale)
+  else { ctx.strokeStyle = '#5a6370'; ctx.lineWidth = 1 / scale; ctx.strokeRect(0, 0, s.width, s.height) }
   emit('warnings', [...evaluated.warnings, ...result.warnings])
 }
 function schedule() { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw) }
@@ -51,10 +44,11 @@ function pointerUp(event: PointerEvent) {
   if (hit) {
     e.selectedId.value = hit.layer.offset
     if (!view3D.value && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5 && e.composition.value?.layers.some(l => l.offset === hit.layer.offset)) {
-      let parent = hit.layer.parent, matrix: Matrix = identity(), seen = new Set<number>()
+      let parent = hit.layer.parent, world = identity4(), seen = new Set<number>()
       const chain = []
       while (parent && !seen.has(parent)) { seen.add(parent); const l = e.composition.value.layers.find(l => l.offset === parent); if (!l) break; chain.unshift(l); parent = l.parent }
-      for (const l of chain) matrix = multiply(matrix, layerMatrix(l, e.frame.value))
+      for (const l of chain) world = multiply4(world, layerMatrix4(l, e.frame.value))
+      const matrix = orthographicMatrix(world)
       const determinant = matrix[0] * matrix[3] - matrix[1] * matrix[2]
       if (Math.abs(determinant) > 1e-9) e.translateLayer(hit.layer.offset, (matrix[3] * dx - matrix[2] * dy) / determinant, (-matrix[1] * dx + matrix[0] * dy) / determinant)
     }
