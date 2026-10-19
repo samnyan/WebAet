@@ -122,6 +122,14 @@ Consequently the observed mode-2 character playback initializes at 0, can displa
 
 This demonstrates why the visible arcade/mix alternatives and version overlays cannot be resolved by choosing a character alone. A preview extension needs an explicit version and secondary-menu state, with activation/transition evidence; it must not silently select a version or strip all non-character alternatives. No UI or evaluator rule was added in this investigation.
 
+## Secondary-menu transition completion
+
+`0x1406BDF00`, renamed and read back as `MainMenuSecondary_CompletePendingSwitch`, checks pending index +2212 against -1, waits for that selector's AET ended status, clears the pending index, builds `MAINMENU_SWITCH`, then applies mode 2 to the current index +2208 selector at base +120 with stride 504. This independently confirms the secondary menu is not simply a set of alternatives sharing ROOT's clock.
+
+The thunk previously named `MainMenu_CleanupSelectorModel` leads to `0x1619DED70`: decoded constants select bases +120 and +1192, and the body applies mode 4 (out markers) to one selected and one alternate instance while resetting state bytes. This is not evidence of immediate hiding/deletion. `0x161A04B90`, reached by the switch-request thunk, contains an unresolved jump at `0x161A04BA8`; its incomplete pseudocode is insufficient to assert all activation behavior. No speculative preview rule was added.
+
+The function rename was verified in the live database. The subsequent IDB save timed out while the worker reported it was still saving, so persistence of this last rename is not confirmed.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
