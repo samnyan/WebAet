@@ -45,7 +45,7 @@ async function pickDirectory(rescan = false) {
 async function changeAsset(name: string) {
   if (e.busy.value || e.dirty.value && !window.confirm('当前修改尚未保存，切换资源会丢弃修改。继续？')) return
   if (!root.value) { const asset = e.documents.value.find(d => d.name === name); if (asset) { try { e.open(asset.bytes, name) } catch (err) { e.error.value = String(err) } }; return }
-  e.busy.value = true
+  e.busy.value = true; e.error.value = ''; e.notices.value = []
   loadController = new AbortController()
   const signal = loadController.signal
   try {

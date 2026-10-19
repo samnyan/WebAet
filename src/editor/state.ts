@@ -59,7 +59,8 @@ export function createEditor() {
     if (projects.length && dirty.value && !window.confirm('当前修改尚未保存，打开工程会丢弃修改。继续？')) return
     // Nested companion imports must not release the directory task's busy state.
     const wasBusy = busy.value
-    busy.value = true; error.value = ''; notices.value = []
+    busy.value = true
+    if (!wasBusy) { error.value = ''; notices.value = [] }
     const incoming: { name: string; bytes: Uint8Array }[] = []
     try {
       for (const [index, file] of files.entries()) {
