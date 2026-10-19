@@ -1,5 +1,6 @@
 import { parseAet } from './reader'
 import { canParent } from '../animation/parenting'
+import { canReferenceComposition } from '../animation/compositionReference'
 import { channels, type AetDocument, type Curve } from './types'
 
 /** Patch original records; append changed variable-length data without relocating unknown records. */
@@ -75,6 +76,7 @@ export function writeAet(doc: AetDocument): Uint8Array {
           integer(l.parent, 0xffffffff, 'layer parent')
           if (!canParent(c, l.offset, l.parent)) throw new Error(`Invalid layer parent: ${l.name} (cycle or reference outside composition)`)
         }
+        if (l.item !== b.item && l.itemType === 3 && !canReferenceComposition(s, c.offset, l.item)) throw new Error(`Invalid composition reference: ${l.name} (cycle or missing target)`)
         if (l.item !== b.item && l.itemType === 1 && !s.videos.some(v => v.offset === l.item)) throw new Error(`Invalid video reference: ${l.name}`)
         if ((l.start !== b.start || l.end !== b.end) && !(Math.fround(l.start) < Math.fround(l.end))) throw new Error(`Layer start must precede end in float32: ${l.name}`)
         integer(l.flags, 65535, 'layer flags'); integer(l.quality, 255, 'layer quality'); integer(l.itemType, 255, 'item type')

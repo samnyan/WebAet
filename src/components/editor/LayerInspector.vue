@@ -5,6 +5,7 @@ import { channels, channels3D } from '../../core/aet/types'
 import type { Editor } from '../../editor/state'
 import SceneInspector from './SceneInspector.vue'
 import { canParent } from '../../core/animation/parenting'
+import { canReferenceComposition } from '../../core/animation/compositionReference'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const layer = computed(() => { e.version.value; return e.selected.value })
 const owner = computed(() => { e.version.value; return e.scene.value?.compositions.find(c => c.layers.some(l => l.offset === layer.value?.offset)) })
@@ -17,6 +18,16 @@ function parent(value: number) {
   const c = owner.value, l = layer.value
   if (!c || !l || (l.flags & 32) || !canParent(c, l.offset, value)) return
   e.edit(() => l.parent = value)
+}
+const compositionOptions = computed(() => {
+  e.version.value
+  const scene = e.scene.value, parent = owner.value
+  return scene && parent ? scene.compositions.map((c, i) => ({ value: c.offset, label: `${i} · ${c.layers.slice(0, 2).map(l => l.name).join(', ')} · ${c.layers.length} layers`, disabled: !canReferenceComposition(scene, parent.offset, c.offset) })) : []
+})
+function compositionSource(value: number) {
+  const l = layer.value, scene = e.scene.value, parent = owner.value
+  if (!l || l.itemType !== 3 || (l.flags & 32) || !scene || !parent || !canReferenceComposition(scene, parent.offset, value)) return
+  e.edit(() => l.item = value)
 }
 const videoOptions = computed(() => { e.version.value; return e.scene.value?.videos.map((v, i) => ({ value: v.offset, label: `${i} · ${v.sources[0]?.name || '纯色'} · ${v.width}×${v.height}` })) ?? [] })
 function source(value: number) {
@@ -58,6 +69,7 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
         <p class="muted">切换父级保留本地变换，不保持世界位置；禁止循环引用。</p>
         <n-button v-if="layer.itemType === 3" size="tiny" @click="e.compositionId.value = layer.item; e.selectedId.value = null">进入合成 ↳</n-button>
       </div>
+      <div v-if="layer.itemType === 3" class="property-group"><b>子合成引用</b><n-select data-testid="composition-source" size="tiny" filterable :value="layer.item" :options="compositionOptions" :disabled="!!(layer.flags & 32)" @update:value="compositionSource" /><p class="muted">替换引用保留本地变换与动画；禁止循环引用，不保持原有画面布局。</p></div>
       <div v-if="layer.itemType === 1" class="property-group"><b>素材引用</b>
         <n-select data-testid="layer-source" size="tiny" filterable :value="layer.item" :options="videoOptions" :disabled="!!(layer.flags & 32)" @update:value="source" />
         <details v-if="sourceDetails.length" data-testid="source-details"><summary>Sprite 引用（{{ sourceDetails.length }}）</summary><div class="source-list"><article v-for="source in sourceDetails" :key="source.index" :data-resolved="source.resolved"><strong>{{ source.index }} · {{ source.name }}</strong><p>ID {{ source.id }} · {{ source.resolved ? '已解析' : '未解析' }}</p><p>{{ source.target }}</p></article></div></details>
