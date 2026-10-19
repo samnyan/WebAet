@@ -7,6 +7,7 @@ import { sampleCurve } from '../../core/animation/curves'
 import { insertSampledKey } from '../../core/animation/insertKey'
 import { markerSegments } from '../../core/animation/segments'
 import { retimeKeys } from '../../core/animation/retime'
+import { offsetKeyValues } from '../../core/animation/offsetValues'
 import CurvePreview from './CurvePreview.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const showCurve = ref(false), playbackSpeed = ref(1), reverse = ref(false)
@@ -92,6 +93,12 @@ function addKey() {
     const inserted = insertSampledKey(c.keys, Math.round(e.frame.value), fullRange.value.start)
     c.keys = inserted.keys; selectedKey.value = inserted.index
   })
+}
+const valueOffset = ref(0)
+function offsetValues() {
+  const target = curve.value
+  if (!target || !target.keys.length || (e.selected.value!.flags & 32)) return
+  stop(); e.edit(() => { target.keys = offsetKeyValues(target.keys, valueOffset.value) })
 }
 const timeScale = ref(1), timeShift = ref(0)
 function retime() {
@@ -183,7 +190,7 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard);
       <div class="key-editor"><span>{{ channel }}</span><n-button data-testid="copy-curve" size="tiny" :disabled="!curve" @click="copyCurve">复制曲线</n-button><n-button data-testid="paste-curve" size="tiny" :disabled="!curve || !copiedCurve || copiedCurve.channel !== channel || !!(e.selected.value!.flags & 32)" :title="copiedCurve ? `替换整条 ${copiedCurve.channel} 曲线（${copiedCurve.keys.length} 个键）` : '先复制同名轨道曲线'" @click="pasteCurve">替换曲线</n-button><n-button data-testid="restore-channel" size="tiny" :disabled="!curve || !!(e.selected.value!.flags & 32)" @click="restoreChannel">恢复原始轨道</n-button><n-button data-testid="make-constant" size="tiny" :disabled="!curve || curve.keys.length < 2 || !!(e.selected.value!.flags & 32)" @click="makeConstant">转为常量</n-button><n-button data-testid="previous-key" size="tiny" :disabled="previousKey < 0" @click="jumpKey(previousKey)">◀◆</n-button><n-button data-testid="next-key" size="tiny" :disabled="nextKey < 0" @click="jumpKey(nextKey)">◆▶</n-button><n-button data-testid="add-key" size="tiny" :disabled="!curve || !!(e.selected.value!.flags & 32)" @click="addKey">＋关键帧</n-button><n-button data-testid="delete-key" size="tiny" :disabled="!key || !!(e.selected.value!.flags & 32)" @click="deleteKey">删除</n-button>
         <template v-if="key"><label v-for="field in (['frame', 'value', 'tangent'] as const)" :key="field">{{ field }}<n-input-number :data-key-field="field" size="tiny" :value="key[field]" :show-button="false" :disabled="!!(e.selected.value!.flags & 32) || (field === 'frame' && curve!.keys.length === 1)" @update:value="editKey(field, $event)" /></label></template><span v-else class="muted">选择 ◆ 编辑时间 / 数值 / Hermite 切线，拖动 ◆ 改时间</span>
       </div>
-      <div class="key-editor"><span>整轨重定时（首键为轴）</span><label>时间倍率<n-input-number data-testid="retime-scale" size="tiny" v-model:value="timeScale" :min="0.001" :show-button="false" /></label><label>偏移 f<n-input-number data-testid="retime-shift" size="tiny" v-model:value="timeShift" :show-button="false" /></label><n-button data-testid="retime-apply" size="tiny" :disabled="!curve || curve.keys.length < 2 || !!(e.selected.value!.flags & 32)" @click="retime">应用重定时</n-button></div>
+      <div class="key-editor"><span>整轨重定时（首键为轴）</span><label>时间倍率<n-input-number data-testid="retime-scale" size="tiny" v-model:value="timeScale" :min="0.001" :show-button="false" /></label><label>偏移 f<n-input-number data-testid="retime-shift" size="tiny" v-model:value="timeShift" :show-button="false" /></label><n-button data-testid="retime-apply" size="tiny" :disabled="!curve || curve.keys.length < 2 || !!(e.selected.value!.flags & 32)" @click="retime">应用重定时</n-button><label>整轨数值偏移<n-input-number data-testid="value-offset" size="tiny" v-model:value="valueOffset" :show-button="false" /></label><n-button data-testid="value-offset-apply" size="tiny" :disabled="!curve?.keys.length || !!(e.selected.value!.flags & 32)" title="平移整条轨道的数值，保留帧时间和切线" @click="offsetValues">应用数值偏移</n-button></div>
     </template>
   </section>
 </template>
