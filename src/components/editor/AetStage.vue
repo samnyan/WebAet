@@ -2,7 +2,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { NButton, NCheckbox } from 'naive-ui'
 import type { Editor } from '../../editor/state'
-import { evaluateScene } from '../../core/render/evaluate'
+import { createSceneEvaluator } from '../../core/render/evaluate'
 import { renderSceneFrame } from '../../core/render/frame'
 import { drawItems, hitTest, type HitArea } from '../../core/render/canvas'
 import { identity4, multiply4, layerMatrix4, orthographicMatrix } from '../../core/animation/transform3d'
@@ -13,6 +13,7 @@ const canvas = ref<HTMLCanvasElement>(), host = ref<HTMLElement>(), zoom = ref(1
 const perspective = ref(false), transparentExport = ref(false)
 const multipleBranches = computed(() => { e.version.value; return !isolate.value && (e.composition.value?.layers.filter(l => l.itemType === 3 && !!(l.flags & 1) && e.frame.value >= l.start && e.frame.value < l.end).length ?? 0) > 1 })
 const view3D = ref(false), yaw = ref(25), pitch = ref(-20)
+const evaluator = computed(() => { e.version.value; return e.scene.value ? createSceneEvaluator(e.scene.value) : null })
 let resize: ResizeObserver, hits: HitArea[] = [], scale = 1, origin = { x: 0, y: 0 }, raf = 0
 let previousWarnings: string[] = []
 function draw() {
@@ -27,7 +28,7 @@ function draw() {
   ctx.translate(origin.x, origin.y); ctx.scale(scale, scale)
   if (!view3D.value) { ctx.fillStyle = `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`; ctx.fillRect(0, 0, s.width, s.height) }
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, s.width, s.height); if (!view3D.value) ctx.clip()
-  const evaluated = evaluateScene(s, e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height, yaw.value, pitch.value) : identity4(), view3D.value && perspective.value ? { x: s.width / 2, y: s.height / 2, distance: Math.max(s.width, s.height) * 1.5 } : undefined)
+  const evaluated = evaluator.value!(e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height, yaw.value, pitch.value) : identity4(), view3D.value && perspective.value ? { x: s.width / 2, y: s.height / 2, distance: Math.max(s.width, s.height) * 1.5 } : undefined)
   const result = drawItems(ctx, evaluated.items, e.library, e.selectedId.value, wireframe.value); hits = result.hits
   ctx.restore()
   if (view3D.value && !perspective.value) drawSpatialGuides(ctx, observationMatrix(s.width, s.height, yaw.value, pitch.value), s.width, s.height, scale)

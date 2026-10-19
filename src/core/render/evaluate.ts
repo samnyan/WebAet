@@ -1,4 +1,4 @@
-import type { Layer, Scene, Video } from '../aet/types'
+import type { Composition, Layer, Scene, Video } from '../aet/types'
 import { sampleCurve, type Matrix } from '../animation/curves'
 import { identity4, multiply4, layerMatrix4, orthographicMatrix, type Matrix4 } from '../animation/transform3d'
 import type { Perspective } from './perspective'
@@ -8,23 +8,36 @@ export interface Evaluation { items: DrawItem[]; warnings: string[] }
 export function layerMatrix(layer: Layer, frame: number): Matrix {
   return orthographicMatrix(layerMatrix4(layer, frame))
 }
-export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4(), perspective?: Perspective): Evaluation {
-  const items: DrawItem[] = [], warnings = new Set<string>()
+/** Recreate after structural edits; curve values are read live, never cached across frames. */
+export function createSceneEvaluator(scene: Scene) {
   const compositions = new Map(scene.compositions.map(c => [c.offset, c])), videos = new Map(scene.videos.map(v => [v.offset, v]))
+  const layers = new Map(scene.compositions.map(c => [c, new Map(c.layers.map(l => [l.offset, l]))]))
+  return (composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4(), perspective?: Perspective) => evaluateIndexed(scene, compositions, videos, layers, composition, frame, hidden, isolated, view, perspective)
+}
+export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4(), perspective?: Perspective): Evaluation {
+  return createSceneEvaluator(scene)(composition, frame, hidden, isolated, view, perspective)
+}
+function evaluateIndexed(scene: Scene, compositions: Map<number, Composition>, videos: Map<number, Video>, layerIndices: Map<Composition, Map<number, Layer>>, composition: number, frame: number, hidden: ReadonlySet<number>, isolated: number | null, view: Matrix4, perspective?: Perspective): Evaluation {
+  const items: DrawItem[] = [], warnings = new Set<string>()
   // AetObj keeps pending sprite state across recursive DispComp calls.
   let pendingMatte: DrawItem | undefined
   if (scene.camera.length) warnings.add('AET camera Eye translation applied (ReDIVA runtime); full camera perspective is not implemented')
   const walk = (id: number, time: number, base: Matrix4, alpha: number, path: number[], ancestors: Set<number>) => {
     if (ancestors.has(id)) { warnings.add('Composition cycle omitted'); return }
     const comp = compositions.get(id); if (!comp) return
-    const layers = new Map(comp.layers.map(l => [l.offset, l])), matrices = new Map<number, Matrix4>()
+    const layers = layerIndices.get(comp)!, matrices = new Map<number, Matrix4>(), parents = new Map<number, Matrix4>()
+    let parentCycle = false
     const localMatrix = (l: Layer) => { let matrix = matrices.get(l.offset); if (!matrix) { matrix = layerMatrix4(l, time); matrices.set(l.offset, matrix) }; return matrix }
     const next = new Set(ancestors); next.add(id)
     const parentMatrix = (l: Layer, seen = new Set<number>()): Matrix4 => {
       if (!l.parent) return identity4()
-      if (seen.has(l.parent)) { warnings.add('Parent cycle omitted'); return identity4() }
+      const cached = parents.get(l.offset); if (cached) return cached
+      if (seen.has(l.parent)) { parentCycle = true; warnings.add('Parent cycle omitted'); return identity4() }
       const p = layers.get(l.parent); if (!p) return identity4()
-      seen.add(p.offset); return multiply4(parentMatrix(p, seen), localMatrix(p))
+      seen.add(p.offset)
+      const result = multiply4(parentMatrix(p, seen), localMatrix(p))
+      if (!parentCycle) parents.set(l.offset, result)
+      return result
     }
     for (let index = comp.layers.length - 1; index >= 0; index--) {
       const l = comp.layers[index]!
