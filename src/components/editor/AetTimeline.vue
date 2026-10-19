@@ -35,6 +35,9 @@ const animationOptions = computed(() => e.composition.value?.layers.map(l => ({ 
 watch(() => [e.selectedId.value, channel.value], () => selectedKey.value = -1, { flush: 'sync' })
 watch(() => [e.sceneIndex.value, e.compositionId.value], () => { stop(); selectedKey.value = -1; e.frame.value = range.value.start })
 function stop() { playing.value = false; cancelAnimationFrame(raf); last = 0 }
+watch(() => e.doc.value?.source, () => { stop(); selectedKey.value = -1; segmentId.value = 'all' }, { flush: 'sync' })
+watch(() => e.busy.value, busy => { if (busy) stop() }, { flush: 'sync' })
+function visibilityChanged() { if (document.hidden) stop() }
 function tick(now: number) {
   if (!playing.value) return
   if (last) {
@@ -44,7 +47,7 @@ function tick(now: number) {
   }
   last = now; raf = requestAnimationFrame(tick)
 }
-function toggle() { if (playing.value) stop(); else { if (e.frame.value < range.value.start || e.frame.value >= range.value.end) e.frame.value = range.value.start; playing.value = true; raf = requestAnimationFrame(tick) } }
+function toggle() { if (!e.doc.value || e.busy.value || document.hidden) return; if (playing.value) stop(); else { if (e.frame.value < range.value.start || e.frame.value >= range.value.end) e.frame.value = range.value.start; playing.value = true; raf = requestAnimationFrame(tick) } }
 const previousKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.reduce((found, k, i) => k.frame < e.frame.value - 0.0001 && k.frame >= range.value.start && k.frame < range.value.end ? i : found, -1) : -1 })
 const nextKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.findIndex(k => k.frame > e.frame.value + 0.0001 && k.frame >= range.value.start && k.frame < range.value.end) : -1 })
 function jumpKey(index: number) {
@@ -127,14 +130,14 @@ function keyboard(event: KeyboardEvent) {
     scrub(Math.min(Math.max(range.value.start, range.value.end - 1), Math.round(e.frame.value) + direction * step))
   }
 }
-onMounted(() => window.addEventListener('keydown', keyboard))
-onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard) })
+onMounted(() => { window.addEventListener('keydown', keyboard); document.addEventListener('visibilitychange', visibilityChanged) })
+onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard); document.removeEventListener('visibilitychange', visibilityChanged) })
 </script>
 <template>
   <section class="timeline" :style="{ height: collapsed ? '38px' : `${height}px` }">
     <div class="timeline-resize" @pointerdown.prevent="resize" />
     <div class="timeline-toolbar"><n-button size="tiny" @click="collapsed = !collapsed">{{ collapsed ? '▸' : '▾' }} 时间线</n-button><template v-if="!collapsed">
-      <n-button data-testid="play" size="tiny" :disabled="!e.doc.value" @click="toggle">{{ playing ? '暂停' : '播放' }}</n-button><n-button size="tiny" @click="scrub(range.start)">|◀</n-button>
+      <n-button data-testid="play" size="tiny" :disabled="!e.doc.value || e.busy.value" @click="toggle">{{ playing ? '暂停' : '播放' }}</n-button><n-button size="tiny" @click="scrub(range.start)">|◀</n-button>
       <n-input-number class="frame-input" size="tiny" :value="e.frame.value" :min="range.start" :max="range.end" :precision="2" :show-button="false" @update:value="v => v !== null && scrub(v)" /><span>f</span><n-checkbox v-model:checked="repeat" size="small">循环</n-checkbox><n-select data-testid="playback-speed" style="width: 85px" size="tiny" v-model:value="playbackSpeed" :options="speedOptions" title="仅改变预览速度，不修改场景帧率" />
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
       <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="!segments.length" />
