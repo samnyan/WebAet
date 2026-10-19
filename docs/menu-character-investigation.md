@@ -72,6 +72,18 @@ A mounted frame-30 inspection revealed large opaque red/yellow/cyan/magenta rect
 
 The evaluator now omits zero-source videos with a deduplicated runtime-binding diagnostic. This changes preview evaluation only, not serialized data. All six selected characters remain present at frames 30/60; draw counts are now 74/54 instead of 92/56, with no zero-source draw items and no document dirty state. Mounted screenshot review confirms the character remains visible; green/purple background bands and overlapping menu choices remain, so removal of placeholders does not establish full controller emulation or game parity. Earlier counts/hashes and performance measurements above describe the pre-fix baseline, not current output. TypeScript checking passed.
 
+## Selector lifecycle follow-up (MegaMix v103)
+
+Directly inspected the selector helpers, not just their caller names:
+
+- `Layout_AddSelectorNodeEx` calls `aet_SetPlay(handle, 0)` then the visibility wrapper with false. All six character selector instances created by `MainMenu_InitSubLayout` are initially paused and hidden; simply traversing ROOT at a shared frame does not reproduce that lifecycle.
+- `0x14065F8D0` forwards to `aet_SetVisible(*(uint32_t*)(selector + 352), visible)`; renamed and read back as `LayoutSelector_SetAetVisible`.
+- `0x140660430` forwards to `aet_GetEnded` on that same handle; renamed and read back as `LayoutSelector_GetAetEnded`.
+- `MainMenu_ProcessSubLayoutSelect` waits on the pending selector's ended status before clearing pending index +12704, building `MAINMENU_SWITCH`, and calling the recreation path for the selected index +12692.
+- The recreation path `0x140660330` calls `0x14065FA30`, which constructs a new display node via `Layout_CreateDisplayNode` and adds it to the layout. Its mode argument must not be relabeled as a frame/time without tracing `Layout_CreateDisplayNode`.
+
+This establishes per-object play/visibility/completion control and node recreation. It does not establish menu text selection, marker endpoints or the exact clocks of all label/transition objects. No further automatic hiding rules were added. The two newly identified wrappers were renamed, verified by lookup and saved in the IDB.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
