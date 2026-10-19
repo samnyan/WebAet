@@ -14,6 +14,17 @@ export function createEditor() {
   const sceneIndex = ref(0), compositionId = ref(0), selectedId = ref<number | null>(null), frame = ref(0)
   const version = ref(0), resourceVersion = ref(0), busy = ref(false), error = ref(''), notices = ref<string[]>([]), hidden = ref(new Set<number>()), dirty = ref(false)
   const undoStack: Scene[][] = [], redoStack: Scene[][] = [], historyVersion = ref(0)
+  const operation = ref(''), completedOperation = ref('')
+  async function runOperation(label: string, action: () => void | Promise<void>) {
+    if (busy.value) return
+    busy.value = true; operation.value = label; error.value = ''; completedOperation.value = ''
+    try {
+      await new Promise<void>(resolve => requestAnimationFrame(() => { setTimeout(resolve, 0) }))
+      await action()
+      if (!error.value) completedOperation.value = `${label}：已请求浏览器下载`
+    } catch (err) { error.value = String(err) }
+    finally { operation.value = ''; busy.value = false }
+  }
   const scene = computed(() => doc.value?.scenes[sceneIndex.value] ?? null)
   const composition = computed(() => scene.value?.compositions.find(c => c.offset === compositionId.value) ?? null)
   const selected = computed(() => { version.value; return scene.value?.compositions.flatMap(c => c.layers).find(l => l.offset === selectedId.value) ?? null })
@@ -122,7 +133,7 @@ export function createEditor() {
     if (scene.value?.compositions.some(c => c.offset === project.view?.compositionId)) compositionId.value = project.view.compositionId
     frame.value = project.view?.frame ?? scene.value?.start ?? 0; markSaved(); refresh()
   }
-  return { doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
+  return { operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
     canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }) }
 }
 export type Editor = ReturnType<typeof createEditor>
