@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { NButton, NCheckbox, NInputNumber, NSelect } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import { channels, channels3D, videoCurve, type EditableChannel, type Curve } from '../../core/aet/types'
@@ -82,7 +82,18 @@ function resize(event: PointerEvent) {
   const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
   window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
 }
-onBeforeUnmount(stop)
+function keyboard(event: KeyboardEvent) {
+  if (!e.doc.value || e.busy.value || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return
+  if ((event.target as HTMLElement)?.closest('input,textarea,select,button,[contenteditable=true],[role=combobox],[role=checkbox],[role=dialog]')) return
+  if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) toggle() }
+  else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    const step = event.shiftKey ? 10 : 1, direction = event.key === 'ArrowRight' ? 1 : -1
+    scrub(Math.min(Math.max(range.value.start, range.value.end - 1), Math.round(e.frame.value) + direction * step))
+  }
+}
+onMounted(() => window.addEventListener('keydown', keyboard))
+onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard) })
 </script>
 <template>
   <section class="timeline" :style="{ height: collapsed ? '38px' : `${height}px` }">
