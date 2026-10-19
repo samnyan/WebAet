@@ -130,6 +130,12 @@ The thunk previously named `MainMenu_CleanupSelectorModel` leads to `0x1619DED70
 
 The function rename was verified in the live database. The subsequent IDB save timed out while the worker reported it was still saving, so persistence of this last rename is not confirmed.
 
+## Recovered secondary switch-request instructions
+
+Defined code at the previously unanalysed fallthrough `0x161A04BA8` and inspected its actual instructions (no executable byte patch). The block loops two choices at base +120 / stride 504. For the requested choice it applies mode 3, pauses/hides the paired selector at +1072, and records the old current index at +2212. For the other choice it pauses/hides the main selector and calls `0x1406BDDE0`; after the loop it stores the requested index at +2208. This supersedes the earlier statement that this entire path remained unavailable in pseudocode.
+
+`0x1406BDDE0` positions the alternate selector (base +1192 / stride 504) at `ed_in`, then calls `0x14065F940`, which explicitly sets play=false and visible=true. The nonselected choice is therefore a paused visible alternate, not simply hidden and not a running exit animation. Renamed these helpers to `MainMenuSecondary_ShowInactiveAtEntranceEnd` and `LayoutSelector_PauseAndShow`, and read both names back. IDB save again timed out while saving, so their persistence is not confirmed. Mapping the two runtime suffix globals to exact asset branches remains necessary before implementing a selector simulation.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
