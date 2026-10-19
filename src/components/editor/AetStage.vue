@@ -69,12 +69,23 @@ function focusSelected() {
   const nextScale = base * zoom.value
   pan.value = { x: (scene.width / 2 - (left + right) / 2) * nextScale, y: (scene.height / 2 - (top + bottom) / 2) * nextScale }
 }
+async function exportPreview() {
+  if (!e.scene.value || !canvas.value) return
+  try {
+    cancelAnimationFrame(raf); draw()
+    const name = `${e.doc.value!.name.replace(/\.bin$/i, '')}_${e.scene.value.name}_${view3D.value ? '3d' : '2d'}_${e.frame.value.toFixed(2)}f.png`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.value!.toBlob(b => b ? resolve(b) : reject(new Error('PNG 编码失败')), 'image/png'))
+    const url = URL.createObjectURL(blob)
+    try { const link = document.createElement('a'); link.href = url; link.download = name; link.click() }
+    finally { setTimeout(() => URL.revokeObjectURL(url), 1000) }
+  } catch (err) { e.error.value = String(err) }
+}
 function preset(y: number, p: number) { yaw.value = y; pitch.value = p; perspective.value = false }
 function reset() { yaw.value = 25; pitch.value = -20; zoom.value = 1; pan.value = { x: 0, y: 0 } }
 </script>
 <template>
   <section class="stage-panel">
-    <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button><template v-if="view3D"><n-button data-testid="view-front" size="tiny" @click="preset(0, 0)">正面</n-button><n-button data-testid="view-right" size="tiny" @click="preset(90, 0)">右侧</n-button><n-button data-testid="view-top" size="tiny" @click="preset(0, -90)">顶面</n-button></template><n-checkbox v-if="view3D" data-testid="perspective" v-model:checked="perspective" size="small">透视（近似）</n-checkbox><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button data-testid="focus-selected" size="tiny" :disabled="e.selectedId.value === null" @click="focusSelected">聚焦选中</n-button><n-button size="tiny" @click="reset">适应画布</n-button></div>
+    <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button><template v-if="view3D"><n-button data-testid="view-front" size="tiny" @click="preset(0, 0)">正面</n-button><n-button data-testid="view-right" size="tiny" @click="preset(90, 0)">右侧</n-button><n-button data-testid="view-top" size="tiny" @click="preset(0, -90)">顶面</n-button></template><n-checkbox v-if="view3D" data-testid="perspective" v-model:checked="perspective" size="small">透视（近似）</n-checkbox><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button data-testid="focus-selected" size="tiny" :disabled="e.selectedId.value === null" @click="focusSelected">聚焦选中</n-button><n-button data-testid="export-preview" size="tiny" :disabled="!e.scene.value || e.busy.value" title="保存当前视口，包含选框、辅助线和当前预览限制；不是游戏原生分辨率渲染" @click="exportPreview">导出预览 PNG</n-button><n-button size="tiny" @click="reset">适应画布</n-button></div>
     <div ref="host" class="stage-host"><canvas ref="canvas" data-testid="aet-stage" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="down = null" @wheel.prevent="zoom = Math.max(0.1, Math.min(8, zoom * ($event.deltaY < 0 ? 1.1 : 0.9)))" /></div>
     <footer>{{ view3D ? '3D 自由观察 · 左键拖动旋转 · 仅改变观察相机，不修改资源 · 尚无完整 AET 相机透视' : '2D · 拖动图层编辑位置' }} · 滚轮缩放 · 中键 / Alt 拖动平移 · 单击选择</footer>
   </section>
