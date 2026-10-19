@@ -1,5 +1,6 @@
 import type { DrawItem } from './evaluate'
-import { point } from '../animation/curves'
+import { point, identity } from '../animation/curves'
+import { drawPerspective, perspectivePoint } from './perspective'
 import type { SpriteLibrary } from '../resources/library'
 const blends: Record<number, GlobalCompositeOperation> = { 1: 'copy', 3: 'source-over', 5: 'lighter', 6: 'multiply', 7: 'screen', 8: 'overlay', 9: 'soft-light', 10: 'hard-light', 11: 'darken', 12: 'lighten', 14: 'hue', 15: 'saturation', 16: 'color', 17: 'luminosity', 26: 'exclusion', 27: 'difference', 28: 'color-dodge', 29: 'color-burn' }
 export interface HitArea { item: DrawItem; points: { x: number; y: number }[] }
@@ -32,6 +33,17 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
       continue
     }
     const entry = library.find(item.sourceName, item.sourceId), w = entry?.sprite.width ?? item.video.width, h = entry?.sprite.height ?? item.video.height
+    if (item.perspective && item.world && w > 0 && h > 0) {
+      const points = [[0, 0], [w, 0], [w, h], [0, h]].map(([x, y]) => perspectivePoint(item.world!, x!, y!, item.perspective!))
+      if (points.some(p => !p)) { warnings.add('Perspective near-plane intersecting sprite omitted'); continue }
+      const texture = document.createElement('canvas'); texture.width = Math.max(1, Math.min(4096, Math.ceil(w))); texture.height = Math.max(1, Math.min(4096, Math.ceil(h)))
+      const local = texture.getContext('2d')!; local.scale(texture.width / w, texture.height / h)
+      const rendered = drawItems(local, [{ ...item, perspective: undefined, matrix: identity(), opacity: 1, blend: 3 }], library, selected, wireframe)
+      for (const warning of rendered.warnings) warnings.add(warning)
+      ctx.save(); ctx.globalAlpha *= item.opacity; ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'
+      drawPerspective(ctx, texture, item.world, item.perspective, w, h); ctx.restore()
+      hits.push({ item, points: points as { x: number; y: number }[] }); continue
+    }
     ctx.save(); ctx.transform(...item.matrix); ctx.globalAlpha *= item.opacity
     ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'
     if (!(item.blend in blends)) warnings.add(`Blend mode ${item.blend} uses normal preview`)

@@ -9,6 +9,7 @@ import { observationMatrix, drawSpatialGuides } from '../../core/render/observat
 const { editor: e } = defineProps<{ editor: Editor }>()
 const emit = defineEmits<{ warnings: [warnings: string[]] }>()
 const canvas = ref<HTMLCanvasElement>(), host = ref<HTMLElement>(), zoom = ref(1), pan = ref({ x: 0, y: 0 }), wireframe = ref(false), isolate = ref(false)
+const perspective = ref(false)
 const view3D = ref(false), yaw = ref(25), pitch = ref(-20)
 let resize: ResizeObserver, hits: HitArea[] = [], scale = 1, origin = { x: 0, y: 0 }, raf = 0
 function draw() {
@@ -21,15 +22,15 @@ function draw() {
   ctx.translate(origin.x, origin.y); ctx.scale(scale, scale)
   if (!view3D.value) { ctx.fillStyle = `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`; ctx.fillRect(0, 0, s.width, s.height) }
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, s.width, s.height); if (!view3D.value) ctx.clip()
-  const evaluated = evaluateScene(s, e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height, yaw.value, pitch.value) : identity4())
+  const evaluated = evaluateScene(s, e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height, yaw.value, pitch.value) : identity4(), view3D.value && perspective.value ? { x: s.width / 2, y: s.height / 2, distance: Math.max(s.width, s.height) * 1.5 } : undefined)
   const result = drawItems(ctx, evaluated.items, e.library, e.selectedId.value, wireframe.value); hits = result.hits
   ctx.restore()
-  if (view3D.value) drawSpatialGuides(ctx, observationMatrix(s.width, s.height, yaw.value, pitch.value), s.width, s.height, scale)
-  else { ctx.strokeStyle = '#5a6370'; ctx.lineWidth = 1 / scale; ctx.strokeRect(0, 0, s.width, s.height) }
+  if (view3D.value && !perspective.value) drawSpatialGuides(ctx, observationMatrix(s.width, s.height, yaw.value, pitch.value), s.width, s.height, scale)
+  else if (!view3D.value) { ctx.strokeStyle = '#5a6370'; ctx.lineWidth = 1 / scale; ctx.strokeRect(0, 0, s.width, s.height) }
   emit('warnings', [...evaluated.warnings, ...result.warnings])
 }
 function schedule() { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw) }
-watch(() => [e.version.value, e.resourceVersion.value, e.doc.value, e.sceneIndex.value, e.compositionId.value, e.selectedId.value, e.frame.value, e.hidden.value, zoom.value, pan.value, wireframe.value, isolate.value, view3D.value, yaw.value, pitch.value], schedule)
+watch(() => [e.version.value, e.resourceVersion.value, e.doc.value, e.sceneIndex.value, e.compositionId.value, e.selectedId.value, e.frame.value, e.hidden.value, zoom.value, pan.value, wireframe.value, isolate.value, view3D.value, perspective.value, yaw.value, pitch.value], schedule)
 onMounted(() => { resize = new ResizeObserver(schedule); resize.observe(host.value!); schedule() })
 onBeforeUnmount(() => { resize?.disconnect(); cancelAnimationFrame(raf) })
 let down: { x: number; y: number; pan: boolean; rotated?: boolean } | null = null
@@ -59,8 +60,8 @@ function reset() { yaw.value = 25; pitch.value = -20; zoom.value = 1; pan.value 
 </script>
 <template>
   <section class="stage-panel">
-    <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View · 正交' : '2D View' }}</n-button><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button size="tiny" @click="reset">适应画布</n-button></div>
+    <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button><n-checkbox v-if="view3D" data-testid="perspective" v-model:checked="perspective" size="small">透视（近似）</n-checkbox><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button size="tiny" @click="reset">适应画布</n-button></div>
     <div ref="host" class="stage-host"><canvas ref="canvas" data-testid="aet-stage" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="down = null" @wheel.prevent="zoom = Math.max(0.1, Math.min(8, zoom * ($event.deltaY < 0 ? 1.1 : 0.9)))" /></div>
-    <footer>{{ view3D ? '3D 正交观察 · 左键拖动旋转 · 仅改变观察相机，不修改资源 · 尚无 AET 相机透视' : '2D · 拖动图层编辑位置' }} · 滚轮缩放 · 中键 / Alt 拖动平移 · 单击选择</footer>
+    <footer>{{ view3D ? '3D 自由观察 · 左键拖动旋转 · 仅改变观察相机，不修改资源 · 尚无 AET 相机透视' : '2D · 拖动图层编辑位置' }} · 滚轮缩放 · 中键 / Alt 拖动平移 · 单击选择</footer>
   </section>
 </template>

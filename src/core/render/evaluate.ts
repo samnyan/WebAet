@@ -1,12 +1,13 @@
 import type { Layer, Scene, Video } from '../aet/types'
 import { sampleCurve, type Matrix } from '../animation/curves'
 import { identity4, multiply4, layerMatrix4, orthographicMatrix, type Matrix4 } from '../animation/transform3d'
-export interface DrawItem { layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; sourceId?: number; blend: number; matte: number; mask?: DrawItem }
+import type { Perspective } from './perspective'
+export interface DrawItem { world?: Matrix4; perspective?: Perspective; layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; sourceId?: number; blend: number; matte: number; mask?: DrawItem }
 export interface Evaluation { items: DrawItem[]; warnings: string[] }
 export function layerMatrix(layer: Layer, frame: number): Matrix {
   return orthographicMatrix(layerMatrix4(layer, frame))
 }
-export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4()): Evaluation {
+export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4(), perspective?: Perspective): Evaluation {
   const items: DrawItem[] = [], warnings = new Set<string>()
   // AetObj keeps pending sprite state across recursive DispComp calls.
   let pendingMatte: DrawItem | undefined
@@ -23,7 +24,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
     for (const l of [...comp.layers].reverse()) {
       if (isolated !== null && path.length === 0 && l.offset !== isolated && !pendingMatte) continue
       if (hidden.has(l.offset) || (!(l.flags & 1) && !pendingMatte) || time < l.start || time >= l.end) continue
-      if (l.video?.extra) warnings.add('3D transforms use orthographic preview; camera/perspective not applied')
+      if (l.video?.extra) warnings.add(perspective ? 'Editor perspective approximation; AET camera not applied' : '3D transforms use orthographic preview; AET camera not applied')
       if (l.itemType === 2) { warnings.add('Audio playback is not supported'); continue }
       const matrix = multiply4(multiply4(base, parentMatrix(l)), layerMatrix4(l, time))
       const opacity = alpha * (l.video ? Math.max(0, Math.min(1, sampleCurve(l.video.curves.opacity, time))) : 1)
@@ -34,7 +35,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       const video = scene.videos.find(v => v.offset === l.item)
       if (!video || (opacity <= 0 && !pendingMatte && !l.video?.matte)) continue
       const source = video.sources[Math.max(0, Math.min(video.sources.length - 1, Math.floor(local * video.frames)))]
-      const item: DrawItem = { layer: l, path: currentPath, matrix: orthographicMatrix(multiply4(view, matrix)), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
+      const item: DrawItem = { layer: l, path: currentPath, world: multiply4(view, matrix), perspective, matrix: orthographicMatrix(multiply4(view, matrix)), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
       // Runtime draws back-to-front: a matte-tagged source is retained, then masked by the next sprite.
       if (pendingMatte) { pendingMatte.mask = item; items.push(pendingMatte); pendingMatte = undefined }
       else if (item.matte) pendingMatte = item
