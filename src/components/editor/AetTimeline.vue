@@ -32,12 +32,18 @@ function tick(now: number) {
   if (!playing.value) return
   if (last) {
     let frame = e.frame.value + Math.min(0.1, (now - last) / 1000) * (e.scene.value?.fps ?? 60)
-    if (frame >= range.value.end) { if (repeat.value) frame = range.value.start + (frame - range.value.start) % (range.value.end - range.value.start); else { e.frame.value = range.value.end; stop(); return } }
+    if (frame >= range.value.end) { if (repeat.value) frame = range.value.start + (frame - range.value.start) % (range.value.end - range.value.start); else { e.frame.value = Math.max(range.value.start, range.value.end - 1); stop(); return } }
     e.frame.value = frame
   }
   last = now; raf = requestAnimationFrame(tick)
 }
-function toggle() { if (playing.value) stop(); else { if (e.frame.value >= range.value.end) e.frame.value = range.value.start; playing.value = true; raf = requestAnimationFrame(tick) } }
+function toggle() { if (playing.value) stop(); else { if (e.frame.value < range.value.start || e.frame.value >= range.value.end) e.frame.value = range.value.start; playing.value = true; raf = requestAnimationFrame(tick) } }
+const previousKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.reduce((found, k, i) => k.frame < e.frame.value - 0.0001 && k.frame >= range.value.start && k.frame < range.value.end ? i : found, -1) : -1 })
+const nextKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.findIndex(k => k.frame > e.frame.value + 0.0001 && k.frame >= range.value.start && k.frame < range.value.end) : -1 })
+function jumpKey(index: number) {
+  const target = curve.value?.keys[index]; if (!target || index < 0) return
+  stop(); selectedKey.value = index; e.frame.value = target.frame
+}
 function scrub(value: number) { stop(); e.frame.value = Math.max(range.value.start, Math.min(range.value.end, value)) }
 function timeAt(event: PointerEvent) { const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect(); return range.value.start + (event.clientX - bounds.left) / pixels.value }
 function rulerDown(event: PointerEvent) { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); scrub(timeAt(event)) }
@@ -94,7 +100,7 @@ onBeforeUnmount(stop)
           <button v-for="(k, i) in track.curve?.keys ?? []" :key="i" class="keyframe" :class="{ chosen: channel === track.channel && selectedKey === i }" :style="{ left: `${((track.curve!.keys.length === 1 ? range.start : k.frame) - range.start) * pixels}px` }" :title="`${track.channel}: ${k.frame}f = ${k.value}, tangent ${k.tangent}`" @pointerdown="dragKey($event, track.channel, i, track.curve!)" />
         </div><div class="playhead" :style="{ left: `${(e.frame.value - range.start) * pixels}px` }" />
       </div></div></div>
-      <div class="key-editor"><span>{{ channel }}</span><n-button data-testid="add-key" size="tiny" :disabled="!curve || !!(e.selected.value!.flags & 32)" @click="addKey">＋关键帧</n-button><n-button data-testid="delete-key" size="tiny" :disabled="!key || !!(e.selected.value!.flags & 32)" @click="deleteKey">删除</n-button>
+      <div class="key-editor"><span>{{ channel }}</span><n-button data-testid="previous-key" size="tiny" :disabled="previousKey < 0" @click="jumpKey(previousKey)">◀◆</n-button><n-button data-testid="next-key" size="tiny" :disabled="nextKey < 0" @click="jumpKey(nextKey)">◆▶</n-button><n-button data-testid="add-key" size="tiny" :disabled="!curve || !!(e.selected.value!.flags & 32)" @click="addKey">＋关键帧</n-button><n-button data-testid="delete-key" size="tiny" :disabled="!key || !!(e.selected.value!.flags & 32)" @click="deleteKey">删除</n-button>
         <template v-if="key"><label v-for="field in (['frame', 'value', 'tangent'] as const)" :key="field">{{ field }}<n-input-number :data-key-field="field" size="tiny" :value="key[field]" :show-button="false" :disabled="!!(e.selected.value!.flags & 32) || (field === 'frame' && curve!.keys.length === 1)" @update:value="editKey(field, $event)" /></label></template><span v-else class="muted">选择 ◆ 编辑时间 / 数值 / Hermite 切线，拖动 ◆ 改时间</span>
       </div>
     </template>
