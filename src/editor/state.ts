@@ -46,6 +46,8 @@ export function createEditor() {
     const projects = files.filter(file => /\.webaet$/i.test(file.name))
     if (projects.length > 1) { error.value = '一次只能打开一个 WebAet 工程；请分别导入。'; return }
     if (projects.length && dirty.value && !window.confirm('当前修改尚未保存，打开工程会丢弃修改。继续？')) return
+    // Nested companion imports must not release the directory task's busy state.
+    const wasBusy = busy.value
     busy.value = true; error.value = ''; notices.value = []
     const incoming: { name: string; bytes: Uint8Array }[] = []
     try {
@@ -69,7 +71,7 @@ export function createEditor() {
       documents.value = [...documents.value.filter(d => !incoming.some(n => n.name === d.name)), ...incoming]
       if (incoming.length && !doc.value) open(incoming[0]!.bytes, incoming[0]!.name)
     } catch (e) { if (signal?.aborted) throw e; error.value = String(e) }
-    finally { busy.value = false }
+    finally { busy.value = wasBusy }
   }
   function setValue(channel: EditableChannel, value: number) {
     const l = selected.value; if (!l?.video || (l.flags & 32)) return

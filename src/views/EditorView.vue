@@ -66,7 +66,6 @@ async function changeAsset(name: string) {
       signal.throwIfAborted()
       progress.value = { phase: '加载 Sprite', current: paths[i]!, done: i, total: paths.length }
       await e.importFiles([await root.value.file(paths[i]!)], signal)
-      e.busy.value = true
     }
   } catch (err) { if (signal.aborted) e.notices.value.push('资源加载已取消；当前资源可能不完整，请重新选择 AET 重试。'); else e.error.value = String(err) }
   finally { loadController = undefined; e.busy.value = false; progress.value = null }
