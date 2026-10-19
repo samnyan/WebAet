@@ -20,6 +20,12 @@ Measured the actual browser renderer with original `aet_nswgam_menu.bin`, `spr_n
 
 Timing is local wall-clock data from one run. Canvas draw timing includes synchronous work but does not isolate completed GPU raster/compositor cost. Headless rendering is not equivalent to a user's desktop GPU. Do not advertise these values as universal FPS or full-editor performance.
 
+## Cold texture follow-up
+
+All eight menu textures use BC5 luma/chroma conversion. Sequential preparation retained all eight textures (110100480 bytes within the 134217728-byte default budget); this case did not demonstrate cache eviction/thrashing. Standalone decode of a 2048×2048 atlas took roughly 522–586 ms in the profiling run. One preparation outlier reached 2468 ms, so decode alone must not be claimed to explain every cold stall.
+
+Replaced the YCbCr conversion loop's per-pixel temporary RGBA array with direct Uint8ClampedArray channel writes. In a same-page baseline-versus-change comparison, all eight original textures were decoded three times by each implementation: every output byte matched. For texture 1 (2048×2048), baseline samples were 545.8/567.8/544.4 ms versus 443.5/472.7/441.5 ms after the change. Other atlas samples also decreased, but this fixed-order local experiment is not a controlled cross-machine benchmark. This reduces allocation in cold conversion only; it does not establish improved warm playback or eliminate first-frame blocking. The temporary baseline module was removed after comparison.
+
 ## Interpretation and next boundary
 
 At this native canvas size the measured cost is drawing/texture preparation, not scene-index lookup or parent evaluation. No further evaluator caching is justified by this baseline. Cold decode preparation must be measured separately before proposing preload, async decode or cache-budget changes; the observed first draw does not prove which texture or decode stage dominates. Warm drawing also warrants profiling independently of the AE timeline work.

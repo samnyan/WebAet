@@ -55,7 +55,12 @@ export function decodeTexture(t: Texture): Uint8ClampedArray {
     }
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const p = (y * w + x) * 4, l = lum[p]! / 255, cb = sample(x, y, 0) * 1.003922 - 0.503929, cr = sample(x, y, 1) * 1.003922 - 0.503929
-      out.set([(l + 1.5748 * cr) * 255, (l - 0.1873 * cb - 0.4681 * cr) * 255, (l + 1.8556 * cb) * 255, lum[p + 1]!], p)
+      // Direct clamped writes preserve conversion rounding without allocating
+      // a temporary four-element array for every decoded pixel.
+      out[p] = (l + 1.5748 * cr) * 255
+      out[p + 1] = (l - 0.1873 * cb - 0.4681 * cr) * 255
+      out[p + 2] = (l + 1.8556 * cb) * 255
+      out[p + 3] = lum[p + 1]!
     }
     return out
   }
