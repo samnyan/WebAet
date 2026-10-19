@@ -18,6 +18,12 @@ function parent(value: number) {
   if (!c || !l || (l.flags & 32) || !canParent(c, l.offset, value)) return
   e.edit(() => l.parent = value)
 }
+const videoOptions = computed(() => { e.version.value; return e.scene.value?.videos.map((v, i) => ({ value: v.offset, label: `${i} · ${v.sources[0]?.name || '纯色'} · ${v.width}×${v.height}` })) ?? [] })
+function source(value: number) {
+  const l = layer.value
+  if (!l || l.itemType !== 1 || (l.flags & 32) || !e.scene.value?.videos.some(v => v.offset === value)) return
+  e.edit(() => l.item = value)
+}
 const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
 function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) { if (value === null || !layer.value) return; e.edit(() => { layer.value![key] = value }) }
 const matteOptions = [{ value: 0, label: '无 / None' }, { value: 1, label: 'Alpha' }, { value: 2, label: '反相 Alpha' }, { value: 3, label: '亮度 / Luma' }, { value: 4, label: '反相亮度 / NotLuma' }]
@@ -36,6 +42,10 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
         <label class="field" data-testid="layer-parent"><span>父级</span><n-select size="tiny" filterable :value="layer.parent" :options="parentOptions" :disabled="!!(layer.flags & 32)" @update:value="parent" /></label>
         <p class="muted">切换父级保留本地变换，不保持世界位置；禁止循环引用。</p>
         <n-button v-if="layer.itemType === 3" size="tiny" @click="e.compositionId.value = layer.item; e.selectedId.value = null">进入合成 ↳</n-button>
+      </div>
+      <div v-if="layer.itemType === 1" class="property-group"><b>素材引用</b>
+        <n-select data-testid="layer-source" size="tiny" filterable :value="layer.item" :options="videoOptions" :disabled="!!(layer.flags & 32)" @update:value="source" />
+        <p class="muted">仅替换当前层引用；保留变换与动画，不修改共享素材。素材尺寸和序列长度可能不同。</p>
       </div>
       <div v-if="layer.video" class="property-group"><b>变换 · {{ e.frame.value.toFixed(1) }} f</b>
         <label v-for="ch in channels" :key="ch" class="field" :data-channel="ch"><span :title="ch">{{ labels[ch] }} <small v-if="layer.video.curves[ch].keys.length > 1">◆</small></span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'opacity' || ch.startsWith('scale') ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
