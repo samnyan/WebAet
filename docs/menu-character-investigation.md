@@ -136,6 +136,14 @@ Defined code at the previously unanalysed fallthrough `0x161A04BA8` and inspecte
 
 `0x1406BDDE0` positions the alternate selector (base +1192 / stride 504) at `ed_in`, then calls `0x14065F940`, which explicitly sets play=false and visible=true. The nonselected choice is therefore a paused visible alternate, not simply hidden and not a running exit animation. Renamed these helpers to `MainMenuSecondary_ShowInactiveAtEntranceEnd` and `LayoutSelector_PauseAndShow`, and read both names back. IDB save again timed out while saving, so their persistence is not confirmed. Mapping the two runtime suffix globals to exact asset branches remains necessary before implementing a selector simulation.
 
+## Exact on/off suffix mapping and textured branch check
+
+The initializer `0x1400FF5B0` assigns `_on` to `0x140DED090` and `_off` to `0x140DED0B0`. Renamed/read back as `InitMenuSelectorOnOffSuffixes`; IDB save again timed out, so persistence is unconfirmed. This resolves the previously unknown selector suffixes: selected mode-3 objects are `_on`; alternate paused visible objects are `_off`.
+
+Using the mounted editor's original AET/FARC/database imports, scene 0 / ROOT index 93 contains all four exact `nsw_menu_selector_{arcade_mode,mix_mode}_{on,off}` layers. Both `_on` layers have markers in=0..6, lp=10..90, sp=195..209, out=210..216. Both `_off` layers have in=0..6, lp=7..19, out=20..26. Native-size original-texture branch draws at `_on` st_lp=10 each emitted 3 items covering 101773 nontransparent pixels; `_off` ed_in=6 each emitted 2 items covering 76444 pixels. Drawing reported no missing-texture warnings. The raw ROOT evaluation still reports the known runtime-binding diagnostic for other source-less layers; isolation is applied after evaluation.
+
+These are branch availability/marker/raster checks, not a composed controller simulation or game screenshot comparison. A correct secondary-menu preview requires two simultaneous instances at different local times, not four alternatives at one shared frame.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
