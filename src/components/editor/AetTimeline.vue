@@ -27,7 +27,17 @@ watch(() => e.selectedId.value, () => { segmentId.value = 'all'; stop() })
 watch(segments, list => { if (segmentId.value !== 'all' && !list.some(s => s.id === segmentId.value)) segmentId.value = 'all' })
 watch(() => [range.value.start, range.value.end], () => { stop(); e.frame.value = Math.max(range.value.start, Math.min(range.value.end, e.frame.value)) })
 watch(segmentId, () => { stop(); e.frame.value = range.value.start })
+const followPlayhead = ref(false)
 const scrollHost = ref<HTMLElement>()
+function revealPlayhead() {
+  const host = scrollHost.value
+  if (!followPlayhead.value || !host || host.clientWidth <= 0) return
+  const x = (e.frame.value - range.value.start) * pixels.value
+  const margin = Math.min(60, host.clientWidth / 4)
+  if (x < host.scrollLeft + margin) host.scrollLeft = Math.max(0, x - margin)
+  else if (x > host.scrollLeft + host.clientWidth - margin) host.scrollLeft = x - host.clientWidth + margin
+}
+watch(() => [e.frame.value, pixels.value, followPlayhead.value, collapsed.value, range.value.start], revealPlayhead, { flush: 'post' })
 const width = computed(() => Math.max(1, (range.value.end - range.value.start) * pixels.value))
 const ticks = computed(() => {
   const span = range.value.end - range.value.start
@@ -160,7 +170,7 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard);
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
       <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="!segments.length" />
       <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small">倒放</n-checkbox><n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
-      <div class="spacer" /><n-button data-testid="fit-timeline" size="tiny" @click="fitRange">适应范围</n-button><n-button size="tiny" @click="pixels = Math.max(0.000001, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
+      <div class="spacer" /><n-checkbox data-testid="follow-playhead" v-model:checked="followPlayhead" size="small">跟随播放头</n-checkbox><n-button data-testid="fit-timeline" size="tiny" @click="fitRange">适应范围</n-button><n-button size="tiny" @click="pixels = Math.max(0.000001, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
     </template></div>
     <template v-if="!collapsed"><div class="timeline-body"><div class="track-labels"><div class="track-ruler-label">属性</div><div v-for="track in tracks" :key="track.channel" class="track-label" :class="{ active: channel === track.channel }" @click="channel = track.channel">{{ track.channel }} <small>{{ track.curve?.keys.length ?? 0 }}</small></div></div>
       <div ref="scrollHost" class="tracks-scroll"><div class="tracks-surface" :style="{ width: `${width}px` }">
