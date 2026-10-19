@@ -18,6 +18,9 @@ export function createEditor() {
   const selected = computed(() => { version.value; return scene.value?.compositions.flatMap(c => c.layers).find(l => l.offset === selectedId.value) ?? null })
   const documents = shallowRef<{ name: string; bytes: Uint8Array }[]>([])
   const snapshot = () => structuredClone(toRaw(doc.value!.scenes))
+  let savedScenes = ''
+  function markSaved() { savedScenes = JSON.stringify(doc.value?.scenes); dirty.value = false }
+  function updateDirty() { dirty.value = JSON.stringify(doc.value?.scenes) !== savedScenes }
   function refresh() { version.value++; triggerRef(doc) }
   function edit(action: () => void) {
     if (!doc.value) return
@@ -26,17 +29,17 @@ export function createEditor() {
       action()
       if (JSON.stringify(before) === JSON.stringify(doc.value.scenes)) return
       undoStack.push(before); if (undoStack.length > 50) undoStack.shift(); redoStack.length = 0
-      historyVersion.value++; dirty.value = true; refresh()
+      historyVersion.value++; updateDirty(); refresh()
     } catch (e) { doc.value.scenes = before; refresh(); error.value = String(e) }
   }
-  function undo() { if (!doc.value || !undoStack.length) return; redoStack.push(snapshot()); doc.value.scenes = undoStack.pop()!; historyVersion.value++; dirty.value = true; refresh() }
-  function redo() { if (!doc.value || !redoStack.length) return; undoStack.push(snapshot()); doc.value.scenes = redoStack.pop()!; historyVersion.value++; dirty.value = true; refresh() }
+  function undo() { if (!doc.value || !undoStack.length) return; redoStack.push(snapshot()); doc.value.scenes = undoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
+  function redo() { if (!doc.value || !redoStack.length) return; undoStack.push(snapshot()); doc.value.scenes = redoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
   function selectScene(index: number) {
     sceneIndex.value = index; const s = doc.value?.scenes[index]
     compositionId.value = s?.compositions.at(-1)?.offset ?? 0; selectedId.value = null; frame.value = s?.start ?? 0; hidden.value = new Set()
   }
   function open(bytes: Uint8Array, name: string) {
-    const parsed = markRaw(parseAet(bytes, name)); doc.value = parsed; undoStack.length = 0; redoStack.length = 0; historyVersion.value++; dirty.value = false; selectScene(0); refresh()
+    const parsed = markRaw(parseAet(bytes, name)); doc.value = parsed; undoStack.length = 0; redoStack.length = 0; historyVersion.value++; markSaved(); selectScene(0); refresh()
   }
   async function importFiles(files: File[]) {
     const projects = files.filter(file => /\.webaet$/i.test(file.name))
@@ -107,7 +110,7 @@ export function createEditor() {
       writeAet(doc.value) // A saved draft must pass the same validation as project reload.
       let binary = ''; for (const b of doc.value.source) binary += String.fromCharCode(b)
       download(new TextEncoder().encode(JSON.stringify({ format: 'webaet-project', version: 1, name: doc.value.name, source: btoa(binary), scenes: doc.value.scenes, view: { sceneIndex: sceneIndex.value, compositionId: compositionId.value, frame: frame.value } })), doc.value.name.replace(/\.bin$/i, '') + '.webaet')
-      dirty.value = false; error.value = ''
+      markSaved(); error.value = ''
     } catch (err) { error.value = String(err) }
   }
   function loadProject(text: string) {
@@ -120,7 +123,7 @@ export function createEditor() {
     // Normalize offsets against original source: appended curve data addresses are not structural IDs.
     selectScene(Math.max(0, Math.min(doc.value!.scenes.length - 1, project.view?.sceneIndex ?? 0)))
     if (scene.value?.compositions.some(c => c.offset === project.view?.compositionId)) compositionId.value = project.view.compositionId
-    frame.value = project.view?.frame ?? scene.value?.start ?? 0; refresh()
+    frame.value = project.view?.frame ?? scene.value?.start ?? 0; markSaved(); refresh()
   }
   return { doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
     canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }) }
