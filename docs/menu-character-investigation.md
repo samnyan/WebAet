@@ -101,9 +101,18 @@ Original asset readback in Chromium found all six character branches in scene 0 
 
 Further call-chain inspection narrows the earlier "node recreation" wording: `app::Layout::AddChild` moves builder fields into the layout descriptor; `0x140660090` calls `Layout_RegisterSprite` with the existing handle at +352. `0x1402921E0` looks up a nonzero handle, initializes a temporary AET object and copies its state into the existing object. This path reapplies playback parameters; it is not evidence of unconditional handle destruction/new-object allocation.
 
-`0x1402912F0` resolves all three supplied marker strings. After virtual initialization with the start/end markers, a supplied third marker overwrites the object's start-time field at +32. Thus mode 2 resolves `st_in`/`ed_lp` for initialization, then applies `st_lp` as the subsequent start boundary. Exact MegaMix frame-step behavior still needs direct inspection before claiming a complete simulation.
+`0x1402912F0` resolves all three supplied marker strings. After virtual initialization with the start/end markers, a supplied third marker overwrites the object's loop-return field at +32 (not the playback start boundary). Mode 2 initializes from `st_in` through `ed_lp`, then stores `st_lp` for loop return. See the direct MegaMix step evidence below; the previous interpretation of +32 as a start-time field was incorrect.
 
 Separately, ReDIVA `AetObj::Init`/`StepFrame` (`auth_2d.cpp:1012–1183`) initializes the frame from the selected boundary, treats marker end time as inclusive, and on forward loop overflow assigns the start time directly, discarding overshoot rather than taking modulo. Its reverse loop similarly assigns the end boundary. This is reference-source evidence, not confirmation that every MegaMix flag has identical behavior. No controller simulation was added on this evidence alone.
+
+## Direct MegaMix initialization and stepping
+
+Resolved AetObj's vtable from constructor `0x14028E230` (`0x140C8CDE0`), then inspected and renamed:
+
+- `0x14028E4F0` -> `AetObj_InitPlaybackFromArgs`: start boundary +52, inclusive end +56, flags +40, frame +140. It initializes boundaries from scene/layer, overrides them from supplied markers, swaps reversed bounds, and initializes frame to the appropriate endpoint.
+- `0x14028EC50` -> `AetObj_StepPlaybackFrame`: pause flag 4 returns without stepping; reverse flag 2 negates progress; loop flag `0x10000`; hold/end flag `0x20000`. Forward overflow uses strict `frame > end`, assigns the start boundary, and with `0x400000` plus a positive +32 loop-return value instead assigns that value. Overshoot is discarded. Reverse overflow assigns end; the special loop-return handling updates the start boundary in that branch rather than behaving as a symmetric modulo.
+
+Consequently the observed mode-2 character playback initializes at 0, can display frame 1488, and on the first forward step exceeding 1488 returns to 11, not 0. The raw scene evaluator remains a stateless arbitrary-frame evaluator; editor-wide transport must not silently inherit this controller policy. Actual timing also depends on frame-rate control/speed and a PV-data multiplier in the step function. This is static executable evidence, not a live game trace. Both function renames were read back and the IDB saved. Menu-label object selection remains unresolved.
 
 ## Remaining acceptance gap
 
