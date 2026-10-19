@@ -20,7 +20,8 @@ function draw() {
   const ratio = devicePixelRatio || 1, width = Math.round(bounds.width * ratio), height = Math.round(bounds.height * ratio)
   if (c.width !== width || c.height !== height) { c.width = width; c.height = height }
   const ctx = c.getContext('2d')!; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.clearRect(0, 0, bounds.width, bounds.height); ctx.fillStyle = '#171a20'; ctx.fillRect(0, 0, bounds.width, bounds.height)
-  const s = e.scene.value; if (!s) return
+  const s = e.scene.value
+  if (!s) { hits = []; previousWarnings = []; emit('warnings', []); return }
   scale = Math.min((bounds.width - 48) / s.width, (bounds.height - 48) / s.height) * zoom.value
   origin = { x: (bounds.width - s.width * scale) / 2 + pan.value.x, y: (bounds.height - s.height * scale) / 2 + pan.value.y }
   ctx.translate(origin.x, origin.y); ctx.scale(scale, scale)

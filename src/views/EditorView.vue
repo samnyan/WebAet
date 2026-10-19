@@ -86,6 +86,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
     <div class="app-toolbar"><strong>WebAet</strong><n-tag size="small" :bordered="false">Local</n-tag>
       <n-button size="tiny" :disabled="e.busy.value" @click="input?.click()">{{ t('open') }}</n-button><n-button size="tiny" :disabled="e.busy.value" @click="pickDirectory(false)">选择资源目录</n-button><n-button v-if="root" size="tiny" :disabled="e.busy.value" @click="pickDirectory(true)">重新扫描</n-button>
       <n-select class="asset-select" size="tiny" :disabled="e.busy.value" filterable :value="e.doc.value?.name" :options="assets" placeholder="AET" @update:value="changeAsset" />
+      <n-button data-testid="close-document" size="tiny" :disabled="e.busy.value || (!e.doc.value && !e.library.sets.length)" @click="e.closeDocument">关闭资源</n-button>
       <n-select class="scene-select" size="tiny" :disabled="e.busy.value" :value="e.sceneIndex.value" :options="scenes" placeholder="Scene" @update:value="e.selectScene" />
       <div class="spacer" /><span v-if="e.dirty.value" class="dirty">●</span><n-button size="tiny" :disabled="e.busy.value || !e.canUndo.value" @click="e.undo">撤销</n-button><n-button size="tiny" :disabled="e.busy.value || !e.canRedo.value" @click="e.redo">重做</n-button>
       <n-button size="tiny" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('保存工程', e.saveProject)">保存工程</n-button><n-button size="tiny" type="primary" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('导出 AET', e.exportBinary)">导出 AET</n-button>

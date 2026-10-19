@@ -50,6 +50,13 @@ export function createEditor() {
     sceneIndex.value = index; const s = doc.value?.scenes[index]
     compositionId.value = s?.compositions.at(-1)?.offset ?? 0; selectedId.value = null; frame.value = s?.start ?? 0; hidden.value = new Set()
   }
+  function closeDocument() {
+    if (busy.value || dirty.value && !window.confirm('当前修改尚未保存，关闭资源会丢弃修改。继续？')) return
+    doc.value = null; documents.value = []; library.clear(); resourceVersion.value++
+    undoStack.length = 0; redoStack.length = 0; historyVersion.value++
+    sceneIndex.value = 0; compositionId.value = 0; selectedId.value = null; frame.value = 0; hidden.value = new Set()
+    error.value = ''; notices.value = []; markSaved(); refresh()
+  }
   function open(bytes: Uint8Array, name: string) {
     const parsed = markRaw(parseAet(bytes, name)); doc.value = parsed; undoStack.length = 0; redoStack.length = 0; historyVersion.value++; markSaved(); selectScene(0); refresh()
   }
@@ -134,7 +141,7 @@ export function createEditor() {
     if (scene.value?.compositions.some(c => c.offset === project.view?.compositionId)) compositionId.value = project.view.compositionId
     frame.value = project.view?.frame ?? scene.value?.start ?? 0; markSaved(); refresh()
   }
-  return { operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
+  return { closeDocument, operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
     canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }) }
 }
 export type Editor = ReturnType<typeof createEditor>
