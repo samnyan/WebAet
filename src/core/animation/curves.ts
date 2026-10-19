@@ -9,6 +9,15 @@ export function sampleCurve(curve: Curve | undefined, frame: number): number {
   const a = k[lo]!, b = k[hi]!, df = b.frame - a.frame, t = (frame - a.frame) / df, t2 = t * t, t3 = t2 * t
   return (2 * t3 - 3 * t2 + 1) * a.value + (3 * t2 - 2 * t3) * b.value + ((t3 - 2 * t2 + t) * a.tangent + (t3 - t2) * b.tangent) * df
 }
+/** Derivative in value/frame units; clamped regions have zero velocity. */
+export function sampleCurveTangent(curve: Curve | undefined, frame: number): number {
+  const k = curve?.keys ?? []
+  if (k.length < 2 || frame < k[0]!.frame || frame > k[k.length - 1]!.frame) return 0
+  let lo = 0, hi = k.length - 1
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (k[mid]!.frame <= frame) lo = mid; else hi = mid }
+  const a = k[lo]!, b = k[hi]!, df = b.frame - a.frame, t = (frame - a.frame) / df
+  return (6 * t * t - 6 * t) * (a.value - b.value) / df + (3 * t * t - 4 * t + 1) * a.tangent + (3 * t * t - 2 * t) * b.tangent
+}
 export type Matrix = [number, number, number, number, number, number]
 export const identity = (): Matrix => [1, 0, 0, 1, 0, 0]
 export function multiply(a: Matrix, b: Matrix): Matrix {

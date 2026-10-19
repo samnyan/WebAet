@@ -3,7 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { NButton, NCheckbox, NInputNumber, NSelect } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import { channels, channels3D, videoCurve, type EditableChannel, type Curve } from '../../core/aet/types'
-import { sampleCurve } from '../../core/animation/curves'
+import { sampleCurve, sampleCurveTangent } from '../../core/animation/curves'
 import { markerSegments } from '../../core/animation/segments'
 import { retimeKeys } from '../../core/animation/retime'
 const { editor: e } = defineProps<{ editor: Editor }>()
@@ -51,12 +51,12 @@ function timeAt(event: PointerEvent) { const bounds = (event.currentTarget as HT
 function rulerDown(event: PointerEvent) { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); scrub(timeAt(event)) }
 function addKey() {
   const c = curve.value; if (!c || (e.selected.value!.flags & 32)) return
-  const frame = Math.round(e.frame.value), value = sampleCurve(c, frame)
+  const frame = Math.round(e.frame.value), value = sampleCurve(c, frame), tangent = sampleCurveTangent(c, frame)
   e.edit(() => {
     if (c.keys.length === 1 && frame !== fullRange.value.start) c.keys[0]!.frame = fullRange.value.start
     const found = c.keys.findIndex(k => k.frame === frame)
     if (found >= 0) { selectedKey.value = found; return }
-    c.keys.push({ frame, value, tangent: 0 }); c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.findIndex(k => k.frame === frame)
+    c.keys.push({ frame, value, tangent }); c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.findIndex(k => k.frame === frame)
   })
 }
 const timeScale = ref(1), timeShift = ref(0)
