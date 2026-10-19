@@ -8,7 +8,9 @@ import { markerSegments } from '../../core/animation/segments'
 import { retimeKeys } from '../../core/animation/retime'
 import CurvePreview from './CurvePreview.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
-const showCurve = ref(false)
+const showCurve = ref(false), playbackSpeed = ref(1)
+const speedOptions = [0.25, 0.5, 1, 2].map(value => ({ value, label: `${value}×` }))
+watch(playbackSpeed, () => { last = 0 })
 const collapsed = ref(false), playing = ref(false), repeat = ref(true), channel = ref<EditableChannel>('positionX'), selectedKey = ref(-1), pixels = ref(3), height = ref(245)
 let raf = 0, last = 0
 const segmentId = ref('all')
@@ -36,7 +38,7 @@ function stop() { playing.value = false; cancelAnimationFrame(raf); last = 0 }
 function tick(now: number) {
   if (!playing.value) return
   if (last) {
-    let frame = e.frame.value + Math.min(0.1, (now - last) / 1000) * (e.scene.value?.fps ?? 60)
+    let frame = e.frame.value + Math.min(0.1, (now - last) / 1000) * (e.scene.value?.fps ?? 60) * playbackSpeed.value
     if (frame >= range.value.end) { if (repeat.value) frame = range.value.start + (frame - range.value.start) % (range.value.end - range.value.start); else { e.frame.value = Math.max(range.value.start, range.value.end - 1); stop(); return } }
     e.frame.value = frame
   }
@@ -133,7 +135,7 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard) 
     <div class="timeline-resize" @pointerdown.prevent="resize" />
     <div class="timeline-toolbar"><n-button size="tiny" @click="collapsed = !collapsed">{{ collapsed ? '▸' : '▾' }} 时间线</n-button><template v-if="!collapsed">
       <n-button data-testid="play" size="tiny" :disabled="!e.doc.value" @click="toggle">{{ playing ? '暂停' : '播放' }}</n-button><n-button size="tiny" @click="scrub(range.start)">|◀</n-button>
-      <n-input-number class="frame-input" size="tiny" :value="e.frame.value" :min="range.start" :max="range.end" :precision="2" :show-button="false" @update:value="v => v !== null && scrub(v)" /><span>f</span><n-checkbox v-model:checked="repeat" size="small">循环</n-checkbox>
+      <n-input-number class="frame-input" size="tiny" :value="e.frame.value" :min="range.start" :max="range.end" :precision="2" :show-button="false" @update:value="v => v !== null && scrub(v)" /><span>f</span><n-checkbox v-model:checked="repeat" size="small">循环</n-checkbox><n-select data-testid="playback-speed" style="width: 85px" size="tiny" v-model:value="playbackSpeed" :options="speedOptions" title="仅改变预览速度，不修改场景帧率" />
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
       <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="!segments.length" />
       <n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
