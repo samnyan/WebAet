@@ -84,6 +84,19 @@ Directly inspected the selector helpers, not just their caller names:
 
 This establishes per-object play/visibility/completion control and node recreation. It does not establish menu text selection, marker endpoints or the exact clocks of all label/transition objects. No further automatic hiding rules were added. The two newly identified wrappers were renamed, verified by lookup and saved in the IDB.
 
+## Display-node marker modes and original character endpoints
+
+Inspected `app::Layout::CreateDisplayNode` at `0x14028D560`. Its final parameter is a marker-mode selector, not a frame number:
+
+- mode 1: start `st_in`, end `ed_in`.
+- mode 2 (the observed selection recreation path): start `st_in`, loop-start field `st_lp`, end `ed_lp`, flags OR `0x410000`.
+- mode 3: start `st_lp`, end `ed_lp`, flags OR `0x10000`.
+- mode 4: start `st_out`, end `ed_out`.
+- modes 5/6: start `st_sp`, end `ed_sp`; mode 6 additionally ORs `0x800000`.
+- mode 7: start `ed_in`, end `st_in`, flags OR 2. Reverse interpretation requires tracing the consuming flags, not merely the names.
+
+Original asset readback in Chromium found all six character branches in scene 0 / ROOT composition index 93 share the following marker frames: `st_in=0`, `ed_in=10`, `st_lp=11`, `ed_lp=1488`, `st_out=1489`, `ed_out=1499`. Each parent layer spans [0,1500), with time offset 0 and scale 1. These are stored marker coordinates; the builder evidence supports entrance-to-loop selection, but exact endpoint wrapping still requires following the AET object's flag/marker consumption. No guessed modulo, shared-clock reset or label-state filtering was implemented.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
