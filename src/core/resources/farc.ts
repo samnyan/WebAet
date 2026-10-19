@@ -22,16 +22,22 @@ export function unpackFarc(bytes: Uint8Array): Map<string, Uint8Array> {
     p = innerSize; entryPadding = entrySize - 16; headerEnd = header.length
   }
   const h = new DataView(header.buffer, header.byteOffset, header.byteLength)
-  const u = (q: number) => h.getUint32(q, false)
+  const u = (q: number) => {
+    if (q < 0 || q + 4 > headerEnd) throw new Error('Truncated FARC entry record')
+    return h.getUint32(q, false)
+  }
+  if (p > headerEnd) throw new Error('Invalid FARC entry table offset')
   const entries = new Map<string, Uint8Array>()
   while (p < headerEnd && entries.size < count) {
     let e = p; while (e < headerEnd && header[e]) e++
     if (e === headerEnd) throw new Error('Unterminated FARC entry name')
     const name = new TextDecoder().decode(header.subarray(p, e)); p = e + 1
+    if (entries.has(name)) throw new Error(`Duplicate FARC entry: "${name}"`)
     const offset = u(p), packed = u(p + 4), unpacked = signature === 'FArc' ? packed : u(p + 8)
     p += signature === 'FArc' ? 8 : 12
     if (futureTone) { flags = u(p); p += 4 }
     if (signature === 'FARC') p += entryPadding
+    if (p > headerEnd) throw new Error('Truncated FARC entry padding')
     const compressed = signature === 'FArC' ? unpacked !== 0 : signature === 'FARC' && !!(flags & 2) && packed !== unpacked
     const encrypted = signature === 'FARC' && !!(flags & 4)
     const size = compressed ? packed : (unpacked || packed)
@@ -58,5 +64,6 @@ export function unpackFarc(bytes: Uint8Array): Map<string, Uint8Array> {
     if (unpacked && data.length !== unpacked) throw new Error(`FARC entry "${name}" decompressed size mismatch: expected ${unpacked} bytes, got ${data.length}; archive may be incomplete or unsupported`)
     entries.set(name, data)
   }
+  if (futureTone && entries.size !== count) throw new Error(`FARC entry count mismatch: expected ${count}, got ${entries.size}`)
   return entries
 }
