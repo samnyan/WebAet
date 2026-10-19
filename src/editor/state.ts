@@ -3,7 +3,7 @@ import { parseAet } from '../core/aet/reader'
 import { writeAet } from '../core/aet/writer'
 import { videoCurve, type AetDocument, type EditableChannel, type Scene } from '../core/aet/types'
 import { SpriteLibrary } from '../core/resources/library'
-import { unpackFarc } from '../core/resources/farc'
+import { unpackFarcAsync } from '../core/resources/farcAsync'
 import { parseSpriteSet } from '../core/resources/sprites'
 import { parseSpriteDatabase } from '../core/resources/database'
 import { sampleCurve } from '../core/animation/curves'
@@ -54,7 +54,7 @@ export function createEditor() {
         try {
           const bytes = new Uint8Array(await file.arrayBuffer())
           if (/\.webaet$/i.test(file.name)) { loadProject(new TextDecoder().decode(bytes)); continue }
-          const entries = /\.farc$/i.test(file.name) ? unpackFarc(bytes) : new Map([[file.name, bytes]])
+          const entries = /\.farc$/i.test(file.name) ? await unpackFarcAsync(bytes) : new Map([[file.name, bytes]])
           for (const [name, data] of entries) {
             if (/^aet_.*\.bin$/i.test(name) && !/^aet_db/i.test(name)) incoming.push({ name, bytes: data })
             else if (/^spr_db\.bin$/i.test(name)) { library.bindDatabase(parseSpriteDatabase(data)); resourceVersion.value++ }
