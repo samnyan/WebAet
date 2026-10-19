@@ -1,4 +1,5 @@
 import { parseAet } from './reader'
+import { canParent } from '../animation/parenting'
 import { channels, type AetDocument, type Curve } from './types'
 
 /** Patch original records; append changed variable-length data without relocating unknown records. */
@@ -63,6 +64,10 @@ export function writeAet(doc: AetDocument): Uint8Array {
       c.layers.forEach((l, li) => {
         const b = before.layers[li]!, q = l.offset
         if (q !== b.offset || l.markers.length !== b.markers.length || !!l.video !== !!b.video) throw new Error('Layer structure changed')
+        if (l.parent !== b.parent) {
+          integer(l.parent, 0xffffffff, 'layer parent')
+          if (!canParent(c, l.offset, l.parent)) throw new Error(`Invalid layer parent: ${l.name} (cycle or reference outside composition)`)
+        }
         integer(l.flags, 65535, 'layer flags'); integer(l.quality, 255, 'layer quality'); integer(l.itemType, 255, 'item type')
         text(q, l.name, b.name); f(q + 4, l.start); f(q + 8, l.end); f(q + 12, l.timeOffset); f(q + 16, l.timeScale)
         view().setUint16(q + 20, l.flags, true); buffer[q + 22] = l.quality; buffer[q + 23] = l.itemType; u(q + 24, l.item); u(q + 28, l.parent)
