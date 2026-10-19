@@ -2,6 +2,7 @@ import type { Layer, Scene, Video } from '../aet/types'
 import { sampleCurve, type Matrix } from '../animation/curves'
 import { identity4, multiply4, layerMatrix4, orthographicMatrix, type Matrix4 } from '../animation/transform3d'
 import type { Perspective } from './perspective'
+import { sceneCameraMatrix } from './camera'
 export interface DrawItem { world?: Matrix4; perspective?: Perspective; layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; sourceId?: number; blend: number; matte: number; mask?: DrawItem }
 export interface Evaluation { items: DrawItem[]; warnings: string[] }
 export function layerMatrix(layer: Layer, frame: number): Matrix {
@@ -11,6 +12,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
   const items: DrawItem[] = [], warnings = new Set<string>()
   // AetObj keeps pending sprite state across recursive DispComp calls.
   let pendingMatte: DrawItem | undefined
+  if (scene.camera.length) warnings.add('AET camera Eye translation applied (ReDIVA runtime); full camera perspective is not implemented')
   const walk = (id: number, time: number, base: Matrix4, alpha: number, path: number[], ancestors: Set<number>) => {
     if (ancestors.has(id)) { warnings.add('Composition cycle omitted'); return }
     const comp = scene.compositions.find(c => c.offset === id); if (!comp) return
@@ -23,7 +25,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
     }
     for (const l of [...comp.layers].reverse()) {
       if (hidden.has(l.offset) || (!(l.flags & 1) && !pendingMatte) || time < l.start || time >= l.end) continue
-      if (l.video?.extra) warnings.add(perspective ? 'Editor perspective approximation; AET camera not applied' : '3D transforms use orthographic preview; AET camera not applied')
+      if (l.video?.extra) warnings.add(perspective ? 'Editor perspective approximation; full AET camera perspective not implemented' : '3D transforms use orthographic preview; full AET camera perspective not implemented')
       if (l.itemType === 2) { warnings.add('Audio playback is not supported'); continue }
       const matrix = multiply4(multiply4(base, parentMatrix(l)), layerMatrix4(l, time))
       const opacity = alpha * (l.video ? Math.max(0, Math.min(1, sampleCurve(l.video.curves.opacity, time))) : 1)
@@ -46,7 +48,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       else items.push(item)
     }
   }
-  walk(composition, frame, identity4(), 1, [], new Set())
+  walk(composition, frame, sceneCameraMatrix(scene, frame), 1, [], new Set())
   if (pendingMatte) warnings.add(`Unpaired track matte: ${pendingMatte.layer.name}`)
   // Filter only after pairing: selecting either side retains the complete composite,
   // including nested selections whose ID is not the first path component.
