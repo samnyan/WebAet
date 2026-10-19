@@ -56,13 +56,18 @@ export class SpriteLibrary {
     if (canvas) { this.canvases.delete(texture); this.canvases.set(texture, canvas) }
     if (!canvas) {
       const bytes = texture.width * texture.height * 4
-      // Keep at most one oversized texture to avoid decoding it for every sprite.
-      while (this.canvases.size && this.decodedBytes + bytes > this.decodedBudget) this.release(this.canvases.keys().next().value!)
+      // Decode before allocating a canvas or evicting usable cached images.
+      const decoded = decodeTexture(texture), pixels = new Uint8ClampedArray(decoded.length), stride = texture.width * 4
       canvas = document.createElement('canvas'); canvas.width = texture.width; canvas.height = texture.height
       // Sprite rectangles use a top-left atlas origin, unlike raw TXP rows.
-      const decoded = decodeTexture(texture), pixels = new Uint8ClampedArray(decoded.length), stride = texture.width * 4
       for (let y = 0; y < texture.height; y++) pixels.set(decoded.subarray(y * stride, (y + 1) * stride), (texture.height - 1 - y) * stride)
-      const ctx = canvas.getContext('2d')!; ctx.putImageData(new ImageData(pixels, texture.width, texture.height), 0, 0)
+      try {
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('Unable to create texture canvas context')
+        ctx.putImageData(new ImageData(pixels, texture.width, texture.height), 0, 0)
+      } catch (error) { canvas.width = canvas.height = 0; throw error }
+      // Keep at most one oversized texture to avoid decoding it for every sprite.
+      while (this.canvases.size && this.decodedBytes + bytes > this.decodedBudget) this.release(this.canvases.keys().next().value!)
       this.canvases.set(texture, canvas); this.decodedBytes += bytes
     }
     return canvas
