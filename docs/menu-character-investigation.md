@@ -114,6 +114,14 @@ Resolved AetObj's vtable from constructor `0x14028E230` (`0x140C8CDE0`), then in
 
 Consequently the observed mode-2 character playback initializes at 0, can display frame 1488, and on the first forward step exceeding 1488 returns to 11, not 0. The raw scene evaluator remains a stateless arbitrary-frame evaluator; editor-wide transport must not silently inherit this controller policy. Actual timing also depends on frame-rate control/speed and a PV-data multiplier in the step function. This is static executable evidence, not a live game trace. Both function renames were read back and the IDB saved. Menu-label object selection remains unresolved.
 
+## Secondary-menu and version branches
+
+`MainMenu_Init` (`0x1406BE350`) constructs secondary-menu names from `nsw_menu_selector` plus `_arcade_mode` / `_mix_mode`, and initializes the separate secondary-menu controller at +15776. Independently it selects one of `result_c_right_first`, `result_c_right_verb`, `result_c_right` using a runtime configuration byte, then creates a selector for that one name at +18000. Raw ROOT traversal displays all alternatives and cannot infer the configuration byte from the AET.
+
+`MainMenu_InitSecondaryMenu` (`0x1406BD450`) iterates both choices and two suffix variants, creating four separate selector instances with mode 2 for one variant and mode 1 for the other. Every instance is passed through `Layout_AddSelectorNodeEx`, the verified pause-and-hide helper. The suffix strings are runtime globals at `0x140DED090` and the following string slot; their values were not resolved in this pass, so no suffix names are asserted. The `MainMenu_CleanupSelectorModel` label points to a thunk into `0x1619DED70`; the name alone is not proof it merely cleans up or hides the secondary menu.
+
+This demonstrates why the visible arcade/mix alternatives and version overlays cannot be resolved by choosing a character alone. A preview extension needs an explicit version and secondary-menu state, with activation/transition evidence; it must not silently select a version or strip all non-character alternatives. No UI or evaluator rule was added in this investigation.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
