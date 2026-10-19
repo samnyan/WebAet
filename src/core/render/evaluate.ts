@@ -22,7 +22,6 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       seen.add(p.offset); return multiply4(parentMatrix(p, seen), layerMatrix4(p, time))
     }
     for (const l of [...comp.layers].reverse()) {
-      if (isolated !== null && path.length === 0 && l.offset !== isolated && !pendingMatte) continue
       if (hidden.has(l.offset) || (!(l.flags & 1) && !pendingMatte) || time < l.start || time >= l.end) continue
       if (l.video?.extra) warnings.add(perspective ? 'Editor perspective approximation; AET camera not applied' : '3D transforms use orthographic preview; AET camera not applied')
       if (l.itemType === 2) { warnings.add('Audio playback is not supported'); continue }
@@ -44,5 +43,7 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
   }
   walk(composition, frame, identity4(), 1, [], new Set())
   if (pendingMatte) warnings.add(`Unpaired track matte: ${pendingMatte.layer.name}`)
-  return { items: isolated === null ? items : items.filter(item => item.path[0] === isolated), warnings: [...warnings] }
+  // Filter only after pairing: selecting either side retains the complete composite,
+  // including nested selections whose ID is not the first path component.
+  return { items: isolated === null ? items : items.filter(item => item.path.includes(isolated) || item.mask?.path.includes(isolated)), warnings: [...warnings] }
 }
