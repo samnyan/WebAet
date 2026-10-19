@@ -23,7 +23,11 @@ export function writeAet(doc: AetDocument): Uint8Array {
     if (!/^[\x20-\x7e]*$/.test(value)) throw new Error('Renamed binary identifiers currently require printable ASCII; original Shift-JIS strings are preserved')
     u(p, append(new TextEncoder().encode(value + '\0')))
   }
-  const color = (p: number, a: number[]) => a.forEach((v, i) => { if (!Number.isInteger(v) || v < 0 || v > 255) throw new Error('Invalid byte color'); buffer[p + i] = v })
+  const color = (p: number, a: number[]) => {
+    if (!Array.isArray(a) || a.length !== 4) throw new Error('Color requires exactly four byte components')
+    for (const v of a) integer(v, 255, 'byte color')
+    buffer.set(a, p)
+  }
   const curve = (c: Curve, before: Curve) => {
     if (!before || c.offset !== before.offset) throw new Error('Curve record address changed')
     if (JSON.stringify(c.keys) === JSON.stringify(before.keys)) return
