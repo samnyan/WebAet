@@ -24,7 +24,8 @@ watch(() => [range.value.start, range.value.end], () => { stop(); e.frame.value 
 watch(segmentId, () => { stop(); e.frame.value = range.value.start })
 const width = computed(() => Math.max(700, (range.value.end - range.value.start) * pixels.value))
 const curve = computed(() => { e.version.value; return videoCurve(e.selected.value?.video, channel.value) })
-const key = computed(() => curve.value?.keys[selectedKey.value])
+// Curves are markRaw and edited in place: expose a fresh display snapshot per revision.
+const key = computed(() => { e.version.value; const k = curve.value?.keys[selectedKey.value]; return k ? { ...k } : undefined })
 const tracks = computed(() => { e.version.value; return [...channels, ...(e.selected.value?.video?.extra ? channels3D : [])].map(ch => ({ channel: ch, curve: videoCurve(e.selected.value?.video, ch) })) })
 const animationOptions = computed(() => e.composition.value?.layers.map(l => ({ value: l.offset, label: l.name })) ?? [])
 watch(() => [e.selectedId.value, channel.value], () => selectedKey.value = -1, { flush: 'sync' })
@@ -76,7 +77,7 @@ function pasteCurve() {
 }
 function deleteKey() { const c = curve.value; if (!c || selectedKey.value < 0 || (e.selected.value!.flags & 32)) return; e.edit(() => c.keys.splice(selectedKey.value, 1)); selectedKey.value = -1 }
 function editKey(field: 'frame' | 'value' | 'tangent', value: number | null) {
-  const c = curve.value, k = key.value; if (!c || !k || value === null || (e.selected.value!.flags & 32)) return
+  const c = curve.value, k = c?.keys[selectedKey.value]; if (!c || !k || value === null || (e.selected.value!.flags & 32)) return
   if (field === 'frame' && c.keys.some(other => other !== k && other.frame === value)) { e.error.value = '关键帧时间不能重复'; return }
   e.edit(() => { k[field] = value; c.keys.sort((a, b) => a.frame - b.frame); selectedKey.value = c.keys.indexOf(k) })
 }
