@@ -33,7 +33,13 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
         <label v-for="ch in channels3D" :key="ch" class="field" :data-channel="ch"><span>{{ ch }}</span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'scaleZ' ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
         <p class="warning">3D 曲线可编辑并导出；画布尚未应用相机 / 透视。</p>
       </div>
-      <div v-if="layer.markers.length" class="property-group"><b>Markers</b><p v-for="m in layer.markers" :key="m.offset"><a @click="e.frame.value = m.frame">{{ m.frame }} · {{ m.name }}</a></p></div>
+      <div v-if="layer.markers.length" class="property-group"><b>Markers</b>
+        <div v-for="m in layer.markers" :key="m.offset" class="marker-editor" :data-marker="m.offset">
+          <label class="field"><span>标记名称</span><n-input size="tiny" :value="m.name" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => m.name = v)" /></label>
+          <label class="field"><a @click="e.frame.value = m.frame">跳到帧 ↗</a><n-input-number size="tiny" :value="m.frame" :disabled="!!(layer.flags & 32)" :show-button="false" @update:value="v => v !== null && e.edit(() => m.frame = v)" /></label>
+        </div>
+        <p class="warning">st_* / ed_* 成对定义预览片段；结束帧包含在播放范围中。二进制重命名仅支持可打印 ASCII。</p>
+      </div>
     </div>
     <p v-else class="empty">选择一个图层查看属性</p>
   </section>

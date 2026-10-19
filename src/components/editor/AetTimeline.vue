@@ -17,6 +17,8 @@ const fullRange = computed(() => {
 })
 const range = computed(() => segments.value.find(s => s.id === segmentId.value) ?? fullRange.value)
 watch(() => e.selectedId.value, () => { segmentId.value = 'all'; stop() })
+watch(segments, list => { if (segmentId.value !== 'all' && !list.some(s => s.id === segmentId.value)) segmentId.value = 'all' })
+watch(() => [range.value.start, range.value.end], () => { stop(); e.frame.value = Math.max(range.value.start, Math.min(range.value.end, e.frame.value)) })
 watch(segmentId, () => { stop(); e.frame.value = range.value.start })
 const width = computed(() => Math.max(700, (range.value.end - range.value.start) * pixels.value))
 const curve = computed(() => { e.version.value; return videoCurve(e.selected.value?.video, channel.value) })
