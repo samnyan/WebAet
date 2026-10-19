@@ -50,10 +50,10 @@ export function writeAet(doc: AetDocument): Uint8Array {
     const old = original.scenes[si]!, p = s.offset
     if (p !== old.offset || s.compositions.length !== old.compositions.length || s.videos.length !== old.videos.length) throw new Error('Structural AET modifications are not supported')
     if (s.width !== old.width || s.height !== old.height) {
-      integer(s.width, 0xffffffff, 'scene width'); integer(s.height, 0xffffffff, 'scene height')
+      integer(s.width, 32768, 'scene width'); integer(s.height, 32768, 'scene height')
       if (!s.width || !s.height) throw new Error('Scene dimensions must be positive')
     }
-    if (s.fps !== old.fps && !(Math.fround(s.fps) > 0)) throw new Error('Scene fps must be positive')
+    if (s.fps !== old.fps && !(Math.fround(s.fps) > 0 && Math.fround(s.fps) <= 1000)) throw new Error('Scene fps must be within (0, 1000] in float32')
     if ((s.start !== old.start || s.end !== old.end) && !(Math.fround(s.start) < Math.fround(s.end))) throw new Error('Scene start must precede end in float32')
     text(p, s.name, old.name); f(p + 4, s.start); f(p + 8, s.end); f(p + 12, s.fps); color(p + 16, s.color); u(p + 20, s.width); u(p + 24, s.height)
     if (s.camera.length !== old.camera.length) throw new Error('Camera structure changed')
