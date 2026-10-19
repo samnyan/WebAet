@@ -24,6 +24,15 @@ function source(value: number) {
   if (!l || l.itemType !== 1 || (l.flags & 32) || !e.scene.value?.videos.some(v => v.offset === value)) return
   e.edit(() => l.item = value)
 }
+const sourceDetails = computed(() => {
+  e.version.value; e.resourceVersion.value
+  const selected = layer.value
+  const video = selected?.itemType === 1 ? e.scene.value?.videos.find(v => v.offset === selected.item) : undefined
+  return video?.sources.map((source, index) => {
+    const entry = e.library.find(source.name, source.id)
+    return { index, name: source.name, id: source.id, resolved: !!entry, target: entry ? `${entry.sprite.name} · ${entry.sprite.width}×${entry.sprite.height} · ${entry.texture.width}×${entry.texture.height} atlas #${entry.sprite.texture}` : '未解析：请加载对应 Sprite 与 spr_db.bin' }
+  }) ?? []
+})
 const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
 function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) {
   const l = layer.value
@@ -51,6 +60,8 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
       </div>
       <div v-if="layer.itemType === 1" class="property-group"><b>素材引用</b>
         <n-select data-testid="layer-source" size="tiny" filterable :value="layer.item" :options="videoOptions" :disabled="!!(layer.flags & 32)" @update:value="source" />
+        <details v-if="sourceDetails.length" data-testid="source-details"><summary>Sprite 引用（{{ sourceDetails.length }}）</summary><div class="source-list"><article v-for="source in sourceDetails" :key="source.index" :data-resolved="source.resolved"><strong>{{ source.index }} · {{ source.name }}</strong><p>ID {{ source.id }} · {{ source.resolved ? '已解析' : '未解析' }}</p><p>{{ source.target }}</p></article></div></details>
+        <p v-else class="muted">纯色素材：无 Sprite 引用。</p>
         <p class="muted">仅替换当前层引用；保留变换与动画，不修改共享素材。素材尺寸和序列长度可能不同。</p>
       </div>
       <div v-if="layer.video" class="property-group"><b>变换 · {{ e.frame.value.toFixed(1) }} f</b>
@@ -75,3 +86,10 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
     <p v-else class="empty">选择一个图层查看属性</p>
   </section>
 </template>
+<style scoped>
+.source-list { max-height: 200px; overflow: auto; overflow-wrap: anywhere; font-size: 11px; }
+.source-list article { padding: 7px 0; border-bottom: 1px solid #ffffff15; }
+.source-list p { margin: 3px 0; color: #9faec2; }
+.source-list [data-resolved=false] strong { color: #e4bf81; }
+summary { cursor: pointer; margin-top: 8px; }
+</style>
