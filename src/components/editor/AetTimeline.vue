@@ -8,9 +8,9 @@ import { markerSegments } from '../../core/animation/segments'
 import { retimeKeys } from '../../core/animation/retime'
 import CurvePreview from './CurvePreview.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
-const showCurve = ref(false), playbackSpeed = ref(1)
+const showCurve = ref(false), playbackSpeed = ref(1), reverse = ref(false)
 const speedOptions = [0.25, 0.5, 1, 2].map(value => ({ value, label: `${value}×` }))
-watch(playbackSpeed, () => { last = 0 })
+watch([playbackSpeed, reverse], () => { last = 0 })
 const collapsed = ref(false), playing = ref(false), repeat = ref(true), channel = ref<EditableChannel>('positionX'), selectedKey = ref(-1), pixels = ref(3), height = ref(245)
 let raf = 0, last = 0
 const segmentId = ref('all')
@@ -41,13 +41,17 @@ function visibilityChanged() { if (document.hidden) stop() }
 function tick(now: number) {
   if (!playing.value) return
   if (last) {
-    let frame = e.frame.value + Math.min(0.1, (now - last) / 1000) * (e.scene.value?.fps ?? 60) * playbackSpeed.value
+    let frame = e.frame.value + Math.min(0.1, (now - last) / 1000) * (e.scene.value?.fps ?? 60) * playbackSpeed.value * (reverse.value ? -1 : 1)
     if (frame >= range.value.end) { if (repeat.value) frame = range.value.start + (frame - range.value.start) % (range.value.end - range.value.start); else { e.frame.value = Math.max(range.value.start, range.value.end - 1); stop(); return } }
+    if (frame < range.value.start) {
+      if (repeat.value) { const span = range.value.end - range.value.start; frame = range.value.start + ((frame - range.value.start) % span + span) % span }
+      else { e.frame.value = range.value.start; stop(); return }
+    }
     e.frame.value = frame
   }
   last = now; raf = requestAnimationFrame(tick)
 }
-function toggle() { if (!e.doc.value || e.busy.value || document.hidden) return; if (playing.value) stop(); else { if (e.frame.value < range.value.start || e.frame.value >= range.value.end) e.frame.value = range.value.start; playing.value = true; raf = requestAnimationFrame(tick) } }
+function toggle() { if (!e.doc.value || e.busy.value || document.hidden) return; if (playing.value) stop(); else { if (e.frame.value < range.value.start || e.frame.value >= range.value.end || (reverse.value && e.frame.value <= range.value.start)) e.frame.value = reverse.value ? Math.max(range.value.start, range.value.end - 1) : range.value.start; playing.value = true; raf = requestAnimationFrame(tick) } }
 const previousKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.reduce((found, k, i) => k.frame < e.frame.value - 0.0001 && k.frame >= range.value.start && k.frame < range.value.end ? i : found, -1) : -1 })
 const nextKey = computed(() => { e.version.value; return curve.value && curve.value.keys.length > 1 ? curve.value.keys.findIndex(k => k.frame > e.frame.value + 0.0001 && k.frame >= range.value.start && k.frame < range.value.end) : -1 })
 function jumpKey(index: number) {
@@ -141,7 +145,7 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard);
       <n-input-number class="frame-input" size="tiny" :value="e.frame.value" :min="range.start" :max="range.end" :precision="2" :show-button="false" @update:value="v => v !== null && scrub(v)" /><span>f</span><n-checkbox v-model:checked="repeat" size="small">循环</n-checkbox><n-select data-testid="playback-speed" style="width: 85px" size="tiny" v-model:value="playbackSpeed" :options="speedOptions" title="仅改变预览速度，不修改场景帧率" />
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
       <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="!segments.length" />
-      <n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
+      <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small">倒放</n-checkbox><n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
       <div class="spacer" /><n-button size="tiny" @click="pixels = Math.max(0.2, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
     </template></div>
     <template v-if="!collapsed"><div class="timeline-body"><div class="track-labels"><div class="track-ruler-label">属性</div><div v-for="track in tracks" :key="track.channel" class="track-label" :class="{ active: channel === track.channel }" @click="channel = track.channel">{{ track.channel }} <small>{{ track.curve?.keys.length ?? 0 }}</small></div></div>
