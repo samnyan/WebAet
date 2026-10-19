@@ -43,7 +43,7 @@ export function unpackFarc(bytes: Uint8Array): Map<string, Uint8Array> {
       : new Uint8Array(ecb(new TextEncoder().encode('project_diva.bin'), { disablePadding: true }).decrypt(data))
     data = data.slice(0, size)
     if (compressed) { if (unpacked > 512 * 1024 * 1024) throw new Error('FARC entry too large'); data = new Uint8Array(gunzipSync(data)) }
-    if (unpacked && data.length !== unpacked) throw new Error('FARC decompressed size mismatch')
+    if (unpacked && data.length !== unpacked) throw new Error(`FARC entry "${name}" decompressed size mismatch: expected ${unpacked} bytes, got ${data.length}; archive may be incomplete or unsupported`)
     entries.set(name, data)
   }
   return entries
