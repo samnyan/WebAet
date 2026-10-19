@@ -33,7 +33,12 @@ export function evaluateScene(scene: Scene, composition: number, frame: number, 
       }
       const video = scene.videos.find(v => v.offset === l.item)
       if (!video || (opacity <= 0 && !pendingMatte && !l.video?.matte)) continue
-      const source = video.sources[Math.max(0, Math.min(video.sources.length - 1, Math.floor(local * video.frames)))]
+      if (video.sources.length > 1 && (l.flags & 8)) warnings.add('Sprite sequence motion blur is not applied')
+      // DispVideo adds an epsilon, then converts to int32 (truncation, not floor).
+      // Out-of-range source access is not emulated: omit safely instead of inventing a held frame.
+      const sourceIndex = video.sources.length <= 1 ? 0 : Math.trunc(local * video.frames + 0.0001)
+      const source = video.sources[sourceIndex]
+      if (video.sources.length > 1 && !source) { warnings.add(`Sprite sequence index out of range: ${l.name} (${sourceIndex})`); continue }
       const item: DrawItem = { layer: l, path: currentPath, world: multiply4(view, matrix), perspective, matrix: orthographicMatrix(multiply4(view, matrix)), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
       // Runtime draws back-to-front: a matte-tagged source is retained, then masked by the next sprite.
       if (pendingMatte) { pendingMatte.mask = item; items.push(pendingMatte); pendingMatte = undefined }
