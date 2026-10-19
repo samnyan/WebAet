@@ -26,7 +26,21 @@ watch(() => e.selectedId.value, () => { segmentId.value = 'all'; stop() })
 watch(segments, list => { if (segmentId.value !== 'all' && !list.some(s => s.id === segmentId.value)) segmentId.value = 'all' })
 watch(() => [range.value.start, range.value.end], () => { stop(); e.frame.value = Math.max(range.value.start, Math.min(range.value.end, e.frame.value)) })
 watch(segmentId, () => { stop(); e.frame.value = range.value.start })
-const width = computed(() => Math.max(700, (range.value.end - range.value.start) * pixels.value))
+const scrollHost = ref<HTMLElement>()
+const width = computed(() => Math.max(1, (range.value.end - range.value.start) * pixels.value))
+const ticks = computed(() => {
+  const span = range.value.end - range.value.start
+  const desired = Math.max(1, 90 / pixels.value, span / 500)
+  const magnitude = 10 ** Math.floor(Math.log10(desired))
+  const step = ([1, 2, 5, 10].find(v => v * magnitude >= desired) ?? 10) * magnitude
+  const first = Math.ceil(range.value.start / step) * step
+  return Array.from({ length: Math.max(0, Math.min(501, Math.floor((range.value.end - first) / step) + 1)) }, (_, i) => first + i * step)
+})
+function fitRange() {
+  const host = scrollHost.value, span = range.value.end - range.value.start
+  if (!host || span <= 0) return
+  pixels.value = Math.min(30, Math.max(1, host.clientWidth - 16) / span); host.scrollLeft = 0
+}
 const curve = computed(() => { e.version.value; return videoCurve(e.selected.value?.video, channel.value) })
 // Curves are markRaw and edited in place: expose a fresh display snapshot per revision.
 const key = computed(() => { e.version.value; const k = curve.value?.keys[selectedKey.value]; return k ? { ...k } : undefined })
@@ -146,11 +160,11 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard);
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
       <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="!segments.length" />
       <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small">倒放</n-checkbox><n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
-      <div class="spacer" /><n-button size="tiny" @click="pixels = Math.max(0.2, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
+      <div class="spacer" /><n-button data-testid="fit-timeline" size="tiny" @click="fitRange">适应范围</n-button><n-button size="tiny" @click="pixels = Math.max(0.000001, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
     </template></div>
     <template v-if="!collapsed"><div class="timeline-body"><div class="track-labels"><div class="track-ruler-label">属性</div><div v-for="track in tracks" :key="track.channel" class="track-label" :class="{ active: channel === track.channel }" @click="channel = track.channel">{{ track.channel }} <small>{{ track.curve?.keys.length ?? 0 }}</small></div></div>
-      <div class="tracks-scroll"><div class="tracks-surface" :style="{ width: `${width}px` }">
-        <div class="time-ruler" @pointerdown="rulerDown" @pointermove="($event.buttons & 1) && scrub(timeAt($event))"><span v-for="i in Math.floor((range.end - range.start) / 30) + 1" :key="i" :style="{ left: `${(i - 1) * 30 * pixels}px` }">{{ range.start + (i - 1) * 30 }}</span></div>
+      <div ref="scrollHost" class="tracks-scroll"><div class="tracks-surface" :style="{ width: `${width}px` }">
+        <div class="time-ruler" @pointerdown="rulerDown" @pointermove="($event.buttons & 1) && scrub(timeAt($event))"><span v-for="tick in ticks" :key="tick" :style="{ left: `${(tick - range.start) * pixels}px` }">{{ tick }}</span></div>
         <div v-for="track in tracks" :key="track.channel" class="track-lane" :class="{ active: channel === track.channel }" @pointerdown="channel = track.channel; rulerDown($event)" @pointermove="($event.buttons & 1) && scrub(timeAt($event))">
           <button v-for="(k, i) in track.curve?.keys ?? []" :key="i" class="keyframe" :class="{ chosen: channel === track.channel && selectedKey === i }" :style="{ left: `${((track.curve!.keys.length === 1 ? range.start : k.frame) - range.start) * pixels}px` }" :title="`${track.channel}: ${k.frame}f = ${k.value}, tangent ${k.tangent}`" @pointerdown="dragKey($event, track.channel, i, track.curve!)" />
         </div><div class="playhead" :style="{ left: `${(e.frame.value - range.start) * pixels}px` }" />
