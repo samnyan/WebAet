@@ -7,12 +7,13 @@ const { editor: e } = defineProps<{ editor: Editor }>()
 const layer = computed(() => { e.version.value; return e.selected.value })
 const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
 function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) { if (value === null || !layer.value) return; e.edit(() => { layer.value![key] = value }) }
+const matteOptions = [{ value: 0, label: '无 / None' }, { value: 1, label: 'Alpha' }, { value: 2, label: '反相 Alpha' }, { value: 3, label: '亮度 / Luma' }, { value: 4, label: '反相亮度 / NotLuma' }]
 const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' }, { value: 6, label: 'Multiply' }, { value: 7, label: 'Screen' }, { value: 8, label: 'Overlay' }, { value: 27, label: 'Difference' }]
 </script>
 <template>
   <section class="panel inspector">
     <header>属性 / Inspector</header>
-    <div v-if="layer" class="property-scroll" :key="layer.offset">
+    <div v-if="layer" class="property-scroll" :key="layer.offset" :data-version="e.version.value">
       <label class="field"><span>名称</span><n-input size="tiny" :value="layer.name" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.name = v)" /></label>
       <div class="property-group"><b>图层</b><code>0x{{ layer.offset.toString(16) }}</code>
         <label class="field"><span>可见</span><n-checkbox :checked="!!(layer.flags & 1)" @update:checked="v => e.edit(() => layer!.flags = v ? layer!.flags | 1 : layer!.flags & ~1)" /></label>
@@ -25,7 +26,8 @@ const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' },
         <label v-for="ch in channels" :key="ch" class="field" :data-channel="ch"><span :title="ch">{{ labels[ch] }} <small v-if="layer.video.curves[ch].keys.length > 1">◆</small></span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'opacity' || ch.startsWith('scale') ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
         <label class="field"><span>混合</span><n-select size="tiny" :value="layer.video.blend" :options="blendOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.blend = v)" /></label>
         <p v-if="layer.video.extra" class="warning">3D 参数保留；当前画布使用 2D 投影。</p>
-        <p v-if="layer.video.matte" class="warning">Track matte {{ layer.video.matte }}：保留但尚未渲染。</p>
+        <label class="field" data-testid="matte-mode"><span>轨道遮罩</span><n-select size="tiny" :value="layer.video.matte" :options="matteOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.matte = v)" /></label>
+        <p v-if="layer.video.matte" class="warning">与倒序绘制中的下一个精灵图层配对；跨合成遮罩尚不支持。亮度预览未验证游戏色彩空间一致性。</p>
       </div>
       <div v-if="layer.video?.extra" class="property-group"><b>3D 变换</b>
         <label v-for="ch in channels3D" :key="ch" class="field" :data-channel="ch"><span>{{ ch }}</span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'scaleZ' ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
