@@ -2,8 +2,18 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { NInput, NSelect, NButton, NCheckbox } from 'naive-ui'
 import type { Editor } from '../../editor/state'
+import { menuCharacterBranches, menuCharacterVisibility } from '../../editor/menuCharacterPreview'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const search = ref('')
+const menuBranches = computed(() => { e.version.value; return menuCharacterBranches(e.composition.value) })
+const menuPreview = computed(() => {
+  const visible = menuBranches.value.filter(branch => !e.hidden.value.has(branch.value))
+  return visible.length === 1 ? visible[0]!.value : 0
+})
+function previewCharacter(value: number) {
+  if (e.busy.value || !e.composition.value) return
+  e.hidden.value = menuCharacterVisibility(e.composition.value, e.hidden.value, value || null)
+}
 const options = computed(() => e.scene.value?.compositions.map((c, i) => ({ value: c.offset, label: `${i === e.scene.value!.compositions.length - 1 ? 'ROOT' : `Comp ${i}`} · ${c.layers.length} · ${c.layers.slice(0, 2).map(l => l.name).join(', ')}` })) ?? [])
 const layers = computed(() => { e.version.value; return e.composition.value?.layers.filter(l => l.name.toLowerCase().includes(search.value.toLowerCase())) ?? [] })
 const parents = computed(() => {
@@ -38,6 +48,10 @@ function keyboard(event: KeyboardEvent) {
       <n-button data-testid="composition-root" size="tiny" @click="returnTo(e.scene.value!.compositions.at(-1)!.offset)">⌂ 根合成</n-button>
       <n-button v-for="parent in parents" :key="parent.layer" data-testid="composition-parent" size="tiny" :title="parent.label" @click="returnTo(parent.composition, parent.layer)">↑ {{ parent.label }}</n-button>
       <small v-if="!parents.length">无上级引用</small>
+    </div>
+    <div v-if="menuBranches.length" class="panel-controls" title="仅预览：选择一个菜单角色分支，保留其他 UI；不模拟完整游戏控制器，不写入 AET。可见性复选框仍可自定义。">
+      <small>菜单角色预览 · 不写入 AET</small>
+      <n-select data-testid="menu-character-preview" size="tiny" :disabled="e.busy.value" :value="menuPreview" :options="[{ value: 0, label: '全部 / 自定义（原始叠加）' }, ...menuBranches.map(b => ({ value: b.value, label: b.label }))]" @update:value="previewCharacter" />
     </div>
     <div ref="list" class="layer-list" tabindex="0" aria-label="图层列表：上下键选择，Home/End 跳转，Enter 进入合成" @keydown="keyboard">
       <div v-for="layer in layers" :key="layer.offset" class="layer-row" :class="{ selected: e.selectedId.value === layer.offset, dim: e.hidden.value.has(layer.offset) || !(layer.flags & 1) }" @click="e.selectedId.value = layer.offset" @dblclick="layer.itemType === 3 && enter(layer.item)">
