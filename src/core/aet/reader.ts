@@ -43,10 +43,27 @@ export function parseAet(source: Uint8Array, name = 'untitled.bin'): AetDocument
       videos: r.array(r.u32(p + 40), r.u32(p + 44), 20, q => ({ offset: q, color: Array.from({ length: 4 }, (_, i) => r.u8(q + i)), width: r.u16(q + 4), height: r.u16(q + 6), frames: r.f32(q + 8), sources: r.array(r.u32(q + 12), r.u32(q + 16), 8, t => ({ offset: t, name: r.string(r.u32(t)), id: r.u32(t + 4) })) })),
     }
     if (!scene.width || !scene.height || scene.width > 32768 || scene.height > 32768 || scene.fps <= 0 || scene.fps > 1000) throw new Error('Unsupported AET scene header')
-    for (const c of scene.compositions) for (const l of c.layers) {
-      if (l.parent && !c.layers.some(x => x.offset === l.parent)) throw new Error('Unresolved parent layer')
-      const items = l.itemType === 1 ? scene.videos : l.itemType === 3 ? scene.compositions : null
-      if (items && l.item && !items.some(x => x.offset === l.item)) throw new Error('Unresolved layer item')
+    const videos = new Set(scene.videos.map(v => v.offset))
+    const compositions = new Set(scene.compositions.map(c => c.offset))
+    for (const c of scene.compositions) {
+      const layers = new Map(c.layers.map(l => [l.offset, l]))
+      for (const l of c.layers) {
+        if (l.parent && !layers.has(l.parent)) throw new Error('Unresolved parent layer')
+        const items = l.itemType === 1 ? videos : l.itemType === 3 ? compositions : null
+        if (items && l.item && !items.has(l.item)) throw new Error('Unresolved layer item')
+      }
+      // Complete each chain once; shared ancestors need not be walked again.
+      const complete = new Set<number>()
+      for (const l of c.layers) {
+        const chain = new Set<number>()
+        let current: Layer | undefined = l
+        while (current && !complete.has(current.offset)) {
+          if (chain.has(current.offset)) throw new Error(`Cyclic parent layer: ${current.name}`)
+          chain.add(current.offset)
+          current = layers.get(current.parent)
+        }
+        for (const offset of chain) complete.add(offset)
+      }
     }
     scenes.push(scene)
   }
