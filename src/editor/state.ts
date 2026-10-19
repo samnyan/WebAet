@@ -6,7 +6,7 @@ import { SpriteLibrary } from '../core/resources/library'
 import { unpackFarc } from '../core/resources/farc'
 import { parseSpriteSet } from '../core/resources/sprites'
 import { parseSpriteDatabase } from '../core/resources/database'
-import { sampleCurve } from '../core/animation/curves'
+import { sampleCurve, sampleCurveTangent } from '../core/animation/curves'
 
 export function createEditor() {
   const doc = shallowRef<AetDocument | null>(null), library = markRaw(new SpriteLibrary())
@@ -68,8 +68,14 @@ export function createEditor() {
     const l = selected.value; if (!l?.video || (l.flags & 32)) return
     const curve = videoCurve(l.video, channel); if (!curve) return
     edit(() => {
+      const time = Math.fround(frame.value)
+      if (!Number.isFinite(Math.fround(value)) || !Number.isFinite(time)) throw new Error('属性值和帧时间必须是有限 float32')
       if (curve.keys.length <= 1) curve.keys = [{ frame: 0, value, tangent: 0 }]
-      else { const found = curve.keys.find(k => Math.abs(k.frame - frame.value) < 0.0001); if (found) found.value = value; else curve.keys.push({ frame: frame.value, value, tangent: 0 }); curve.keys.sort((a, b) => a.frame - b.frame) }
+      else {
+        const found = curve.keys.find(k => k.frame === time)
+        if (found) found.value = value
+        else { const tangent = sampleCurveTangent(curve, time); curve.keys.push({ frame: time, value, tangent }); curve.keys.sort((a, b) => a.frame - b.frame) }
+      }
     })
   }
   function translateLayer(id: number, dx: number, dy: number) {
