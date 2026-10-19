@@ -65,6 +65,21 @@ export function parseAet(source: Uint8Array, name = 'untitled.bin'): AetDocument
         for (const offset of chain) complete.add(offset)
       }
     }
+    // Topological validation is iterative: even a very deep valid graph must not
+    // exhaust the JavaScript call stack. Null items carry no graph edge.
+    const edges = new Map(scene.compositions.map(c => [c.offset,
+      c.layers.filter(l => l.itemType === 3 && l.item).map(l => l.item)]))
+    const incoming = new Map(scene.compositions.map(c => [c.offset, 0]))
+    for (const targets of edges.values()) for (const target of targets) incoming.set(target, incoming.get(target)! + 1)
+    const ready = [...incoming].filter(([, count]) => count === 0).map(([offset]) => offset)
+    for (let i = 0; i < ready.length; i++) {
+      for (const target of edges.get(ready[i]!)!) {
+        const count = incoming.get(target)! - 1
+        incoming.set(target, count)
+        if (!count) ready.push(target)
+      }
+    }
+    if (ready.length !== scene.compositions.length) throw new Error('Cyclic composition reference')
     scenes.push(scene)
   }
   if (!scenes.length) throw new Error('No AET scenes found')
