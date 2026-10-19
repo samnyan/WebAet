@@ -17,15 +17,20 @@ const collapsed = ref(false), playing = ref(false), repeat = ref(true), channel 
 let raf = 0, last = 0
 const segmentId = ref('all')
 const segments = computed(() => { e.version.value; return markerSegments(e.selected.value?.markers ?? []) })
-const segmentOptions = computed(() => [{ value: 'all', label: '完整时间范围' }, ...segments.value.map(s => ({ value: s.id, label: s.label }))])
+const layerRange = computed(() => {
+  e.version.value
+  const layer = e.selected.value
+  return layer && Number.isFinite(layer.start) && Number.isFinite(layer.end) && layer.end > layer.start ? { start: layer.start, end: layer.end } : null
+})
+const segmentOptions = computed(() => [{ value: 'all', label: '完整时间范围' }, ...(layerRange.value ? [{ value: 'layer', label: `选中图层 · ${layerRange.value.start}–${layerRange.value.end} f（末端不含）` }] : []), ...segments.value.map(s => ({ value: s.id, label: s.label }))])
 const fullRange = computed(() => {
   e.version.value
   const layers = e.composition.value?.layers ?? []
   return { start: Math.min(e.scene.value?.start ?? 0, ...layers.map(l => l.start)), end: Math.max(e.scene.value?.end ?? 60, ...layers.map(l => l.end), 1) }
 })
-const range = computed(() => segments.value.find(s => s.id === segmentId.value) ?? fullRange.value)
+const range = computed(() => (segmentId.value === 'layer' ? layerRange.value : segments.value.find(s => s.id === segmentId.value)) ?? fullRange.value)
 watch(() => e.selectedId.value, () => { segmentId.value = 'all'; stop() })
-watch(segments, list => { if (segmentId.value !== 'all' && !list.some(s => s.id === segmentId.value)) segmentId.value = 'all' })
+watch(segmentOptions, list => { if (!list.some(s => s.value === segmentId.value)) segmentId.value = 'all' })
 watch(() => [range.value.start, range.value.end], () => { stop(); e.frame.value = Math.max(range.value.start, Math.min(range.value.end, e.frame.value)) })
 watch(segmentId, () => { stop(); e.frame.value = range.value.start })
 const followPlayhead = ref(false)
@@ -175,7 +180,7 @@ onBeforeUnmount(() => { stop(); window.removeEventListener('keydown', keyboard);
       <n-button data-testid="play" size="tiny" :disabled="!e.doc.value || e.busy.value" @click="toggle">{{ playing ? '暂停' : '播放' }}</n-button><n-button size="tiny" @click="scrub(range.start)">|◀</n-button>
       <n-input-number class="frame-input" size="tiny" :value="e.frame.value" :min="range.start" :max="range.end" :precision="2" :show-button="false" @update:value="v => v !== null && scrub(v)" /><span>f</span><n-checkbox v-model:checked="repeat" size="small">循环</n-checkbox><n-select data-testid="playback-speed" style="width: 85px" size="tiny" v-model:value="playbackSpeed" :options="speedOptions" title="仅改变预览速度，不修改场景帧率" />
       <n-select class="timeline-layer" size="tiny" filterable :value="e.selectedId.value" :options="animationOptions" placeholder="选择图层 / Animation" @update:value="e.selectedId.value = $event" />
-      <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="!segments.length" />
+      <n-select class="timeline-segment" style="width: 190px" size="tiny" v-model:value="segmentId" :options="segmentOptions" :disabled="segmentOptions.length < 2" />
       <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small">倒放</n-checkbox><n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
       <div class="spacer" /><n-checkbox data-testid="follow-playhead" v-model:checked="followPlayhead" size="small">跟随播放头</n-checkbox><n-button data-testid="fit-timeline" size="tiny" @click="fitRange">适应范围</n-button><n-button size="tiny" @click="pixels = Math.max(0.000001, pixels / 1.4)">−</n-button><n-button size="tiny" @click="pixels = Math.min(30, pixels * 1.4)">+</n-button>
     </template></div>
