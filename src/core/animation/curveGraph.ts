@@ -17,5 +17,5 @@ export function curveGraph(curve: Curve | undefined, start: number, end: number)
   const y = (v: number) => high === low ? 42 : 70 - (v - low) / (high - low) * 56
   const xy = (p: { frame: number; value: number }) => `${x(p.frame)},${y(p.value)}`
   const path = `M${xy(segments[0]![0]!)}` + segments.map(s => `C${xy(s[1]!)} ${xy(s[2]!)} ${xy(s[3]!)}`).join(' ')
-  return { low, high, path, keys: curve.keys.filter(k => k.frame >= start && k.frame <= end).map(k => ({ x: x(k.frame), y: y(k.value), title: `${k.frame}f = ${k.value}` })) }
+  return { low, high, path, keys: curve.keys.map((k, index) => ({ ...k, index })).filter(k => k.frame >= start && k.frame <= end).map(k => ({ index: k.index, x: x(k.frame), y: y(k.value), title: `${k.frame}f = ${k.value}` })) }
 }
