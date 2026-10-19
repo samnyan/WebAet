@@ -144,6 +144,12 @@ Using the mounted editor's original AET/FARC/database imports, scene 0 / ROOT in
 
 These are branch availability/marker/raster checks, not a composed controller simulation or game screenshot comparison. A correct secondary-menu preview requires two simultaneous instances at different local times, not four alternatives at one shared frame.
 
+## Independent-object evaluation primitive
+
+Added framework-independent `src/core/render/instances.ts`: callers explicitly supply ordered composition/branch/frame instances, reusing the indexed evaluator but resetting traversal/matte state for every object. No menu-name heuristics, automatic frame advancement, UI wiring or serialized fields were added. Recreate this evaluator on scene revision like the existing scene evaluator. The caller still owns controller state and actual runtime object draw order.
+
+Mounted original-companion verification: scene 0 / ROOT 93, arcade active and mix active, each sampled at frames 10/30/60/89 with the other `_off` instance frozen at frame 6. All eight results matched the complete ordered concatenation and native-size PNG pixels of separately evaluated reference objects; inactive draw items stayed unchanged, active composite pixels varied, and the scene JSON remained unchanged. Results contained 5 items at frame 10 and 7 at the other samples. Empty-instance output was also checked. `pnpm exec vue-tsc --noEmit` passed. These are independent-clock/compositor checks, not game draw-order parity or a mounted Stage menu simulator; the existing runtime-binding diagnostic remains.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
