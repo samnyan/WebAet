@@ -1,29 +1,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Curve } from '../../core/aet/types'
-import { sampleCurve } from '../../core/animation/curves'
+import { curveGraph } from '../../core/animation/curveGraph'
 const props = defineProps<{ curve?: Curve; start: number; end: number; frame: number; revision: number }>()
 const graph = computed(() => {
   props.revision
-  const span = props.end - props.start
-  if (!props.curve?.keys.length || span <= 0) return null
-  const samples = Array.from({ length: 257 }, (_, i) => ({ frame: props.start + span * i / 256, value: sampleCurve(props.curve, props.start + span * i / 256) }))
-  const keys = props.curve.keys.filter(k => k.frame >= props.start && k.frame <= props.end)
-  const values = [...samples, ...keys].map(k => k.value)
-  const low = Math.min(...values), high = Math.max(...values), extent = high - low || 1
-  const x = (f: number) => 12 + (f - props.start) / span * 576
-  const y = (v: number) => 70 - (v - low) / extent * 56
-  return { low, high, path: samples.map((s, i) => `${i ? 'L' : 'M'}${x(s.frame)},${y(s.value)}`).join(' '), keys: keys.map(k => ({ x: x(k.frame), y: y(k.value), title: `${k.frame}f = ${k.value}` })), playhead: x(props.frame) }
+  return curveGraph(props.curve, props.start, props.end)
 })
+const playhead = computed(() => 12 + (props.frame - props.start) / (props.end - props.start) * 576)
 </script>
 <template>
   <div v-if="graph" class="curve-preview" data-testid="curve-preview">
     <svg viewBox="0 0 600 84" preserveAspectRatio="none" role="img" aria-label="当前轨道 Hermite 曲线预览">
       <path :d="graph.path" fill="none" stroke="#79c6ff" stroke-width="1.5" vector-effect="non-scaling-stroke" />
       <circle v-for="(key, i) in graph.keys" :key="i" :cx="key.x" :cy="key.y" r="3" fill="#e6c36b"><title>{{ key.title }}</title></circle>
-      <line v-if="frame >= start && frame <= end" :x1="graph.playhead" :x2="graph.playhead" y1="0" y2="84" stroke="#ef7885" vector-effect="non-scaling-stroke" />
+      <line v-if="frame >= start && frame <= end" :x1="playhead" :x2="playhead" y1="0" y2="84" stroke="#ef7885" vector-effect="non-scaling-stroke" />
     </svg>
-    <small>{{ graph.low.toPrecision(5) }} … {{ graph.high.toPrecision(5) }} · 采样预览</small>
+    <small>{{ graph.low.toPrecision(5) }} … {{ graph.high.toPrecision(5) }} · Bézier 控制包络</small>
   </div>
 </template>
 <style scoped>
