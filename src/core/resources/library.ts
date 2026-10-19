@@ -26,14 +26,19 @@ export class SpriteLibrary {
       for (const texture of removed.textures) if (!this.sets.some(s => s.textures.includes(texture)) && !set.textures.includes(texture)) this.release(texture)
     }
     this.sets.push(set)
-    this.rebuildEntries()
+    if (previous >= 0) this.rebuildEntries()
+    else { this.indexSet(set); this.resolveIds() }
+  }
+  private indexSet(set: SpriteSet) {
+    const prefix = set.name.replace(/^spr_/i, '').replace(/\.bin$/i, '').toUpperCase()
+    for (const sprite of set.sprites) {
+      const texture = set.textures[sprite.texture]
+      if (texture) { const entry = { sprite, texture }; for (const alias of [...spriteAliases(sprite.name), ...spriteAliases(`${prefix}_${sprite.name}`)]) this.entries.set(alias, entry) }
+    }
   }
   private rebuildEntries() {
     this.entries.clear()
-    for (const set of this.sets) {
-      const prefix = set.name.replace(/^spr_/i, '').replace(/\.bin$/i, '').toUpperCase()
-      for (const sprite of set.sprites) { const texture = set.textures[sprite.texture]; if (texture) for (const alias of [...spriteAliases(sprite.name), ...spriteAliases(`${prefix}_${sprite.name}`)]) this.entries.set(alias, { sprite, texture }) }
-    }
+    for (const set of this.sets) this.indexSet(set)
     this.resolveIds()
   }
   bindDatabase(entries: SpriteDatabaseEntry[]) { this.database = entries; this.rebuildEntries() }
