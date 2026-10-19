@@ -78,6 +78,16 @@ export function createEditor() {
       }
     })
   }
+  function restoreChannel(channel: EditableChannel) {
+    const l = selected.value, current = doc.value
+    if (!l || !current || (l.flags & 32)) return
+    try {
+      const original = parseAet(current.source, current.name).scenes[sceneIndex.value]?.compositions.flatMap(c => c.layers).find(x => x.offset === l.offset)
+      const target = videoCurve(l.video, channel), source = videoCurve(original?.video, channel)
+      if (!target || !source) return
+      edit(() => { target.keys = source.keys.map(k => ({ ...k })) })
+    } catch (err) { error.value = String(err) }
+  }
   function translateLayer(id: number, dx: number, dy: number) {
     const l = composition.value?.layers.find(l => l.offset === id)
     if (!l?.video || (l.flags & 32)) return
@@ -109,7 +119,7 @@ export function createEditor() {
     if (scene.value?.compositions.some(c => c.offset === project.view?.compositionId)) compositionId.value = project.view.compositionId
     frame.value = project.view?.frame ?? scene.value?.start ?? 0; refresh()
   }
-  return { doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, translateLayer, exportBinary, saveProject,
+  return { doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
     canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }) }
 }
 export type Editor = ReturnType<typeof createEditor>
