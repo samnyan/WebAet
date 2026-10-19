@@ -12,6 +12,6 @@ export function renderSceneFrame(scene: Scene, composition: number, frame: numbe
   const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Canvas2D 不可用')
   if (!transparent) { ctx.fillStyle = `rgb(${scene.color[0]},${scene.color[1]},${scene.color[2]})`; ctx.fillRect(0, 0, width, height) }
   const evaluated = evaluateScene(scene, composition, frame, new Set(), isolated)
-  const result = drawItems(ctx, evaluated.items, library, null, false)
+  const result = drawItems(ctx, evaluated.items, library, null, false, false)
   return { canvas, warnings: [...new Set([...evaluated.warnings, ...result.warnings])] }
 }

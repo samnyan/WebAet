@@ -16,7 +16,7 @@ function scratch(owner: CanvasRenderingContext2D, width: number, height: number)
   ctx.save()
   return { ctx, release() { ctx.restore(); if (pool!.length < 2) pool!.push(ctx) } }
 }
-export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], library: SpriteLibrary, selected: number | null, wireframe: boolean): { hits: HitArea[]; warnings: string[] } {
+export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], library: SpriteLibrary, selected: number | null, wireframe: boolean, collectHits = true): { hits: HitArea[]; warnings: string[] } {
   const hits: HitArea[] = [], warnings = new Set<string>()
   for (const item of items) {
     if (item.mask && !wireframe) {
@@ -27,8 +27,8 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
       const transform = ctx.getTransform()
       s.setTransform(transform); m.setTransform(transform)
       const plain = { ...item, mask: undefined, blend: 3 }
-      const drawn = drawItems(s, [plain], library, selected, false)
-      const masked = drawItems(m, [{ ...item.mask, blend: 3 }], library, null, false)
+      const drawn = drawItems(s, [plain], library, selected, false, collectHits)
+      const masked = drawItems(m, [{ ...item.mask, blend: 3 }], library, null, false, false)
       for (const warning of [...drawn.warnings, ...masked.warnings]) warnings.add(warning)
       if (item.matte === 3 || item.matte === 4) {
         // Canvas returns unpremultiplied sRGB. Convert luminance to coverage;
@@ -54,11 +54,11 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
       const lease = scratch(ctx, Math.max(1, Math.min(4096, Math.ceil(w))), Math.max(1, Math.min(4096, Math.ceil(h))))
       try {
         const local = lease.ctx, texture = local.canvas; local.scale(texture.width / w, texture.height / h)
-        const rendered = drawItems(local, [{ ...item, perspective: undefined, matrix: identity(), opacity: 1, blend: 3 }], library, selected, wireframe)
+        const rendered = drawItems(local, [{ ...item, perspective: undefined, matrix: identity(), opacity: 1, blend: 3 }], library, selected, wireframe, false)
         for (const warning of rendered.warnings) warnings.add(warning)
         ctx.save(); ctx.globalAlpha *= item.opacity; ctx.globalCompositeOperation = blends[item.blend] ?? 'source-over'
         drawPerspective(ctx, texture, item.world, item.perspective, w, h); ctx.restore()
-        hits.push({ item, points: points as { x: number; y: number }[] })
+        if (collectHits) hits.push({ item, points: points as { x: number; y: number }[] })
       } finally { lease.release() }
       continue
     }
@@ -76,7 +76,7 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
     }
     if (selected === item.layer.offset) { ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = '#62d8c1'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h) }
     ctx.restore()
-    hits.push({ item, points: [point(item.matrix, 0, 0), point(item.matrix, w, 0), point(item.matrix, w, h), point(item.matrix, 0, h)] })
+    if (collectHits) hits.push({ item, points: [point(item.matrix, 0, 0), point(item.matrix, w, 0), point(item.matrix, w, h), point(item.matrix, 0, h)] })
   }
   return { hits, warnings: [...warnings] }
 }
