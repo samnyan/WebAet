@@ -21,13 +21,22 @@ export class SpriteLibrary {
   }
   add(set: SpriteSet) {
     const previous = this.sets.findIndex(s => s.name.toLowerCase() === set.name.toLowerCase())
-    if (previous >= 0) this.sets.splice(previous, 1)
+    if (previous >= 0) {
+      const removed = this.sets.splice(previous, 1)[0]!
+      for (const texture of removed.textures) if (!this.sets.some(s => s.textures.includes(texture)) && !set.textures.includes(texture)) this.release(texture)
+    }
     this.sets.push(set)
-    const prefix = set.name.replace(/^spr_/i, '').replace(/\.bin$/i, '').toUpperCase()
-    for (const sprite of set.sprites) { const texture = set.textures[sprite.texture]; if (texture) for (const alias of [...spriteAliases(sprite.name), ...spriteAliases(`${prefix}_${sprite.name}`)]) this.entries.set(alias, { sprite, texture }) }
+    this.rebuildEntries()
+  }
+  private rebuildEntries() {
+    this.entries.clear()
+    for (const set of this.sets) {
+      const prefix = set.name.replace(/^spr_/i, '').replace(/\.bin$/i, '').toUpperCase()
+      for (const sprite of set.sprites) { const texture = set.textures[sprite.texture]; if (texture) for (const alias of [...spriteAliases(sprite.name), ...spriteAliases(`${prefix}_${sprite.name}`)]) this.entries.set(alias, { sprite, texture }) }
+    }
     this.resolveIds()
   }
-  bindDatabase(entries: SpriteDatabaseEntry[]) { this.database = entries; this.resolveIds() }
+  bindDatabase(entries: SpriteDatabaseEntry[]) { this.database = entries; this.rebuildEntries() }
   private resolveIds() {
     this.ids.clear()
     for (const entry of this.database) {
