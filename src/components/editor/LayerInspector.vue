@@ -7,6 +7,7 @@ import type { PreviewTarget } from '../../editor/workspaceAssets'
 import SceneInspector from './SceneInspector.vue'
 import PropertyEditorRow from './properties/PropertyEditorRow.vue'
 import LayerReferenceSelect from './LayerReferenceSelect.vue'
+import LayerSlipControl from './LayerSlipControl.vue'
 import AssetPreview from './AssetPreview.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const showMaterialPicker = ref(false)
@@ -46,6 +47,7 @@ const toggle = (id: string) => e.workspace.toggleExpanded(`closed:${id}`, 'inspe
       <div class="sticky-layer"><input v-if="renaming" ref="nameInput" v-model="nameDraft" aria-label="图层名称" @blur="commitName" @keydown.enter.prevent="commitName" @keydown.esc.prevent="renaming = false" /><strong v-else :title="`${layer.name} · 双击重命名 · 0x${layer.offset.toString(16)}`" tabindex="0" @dblclick="rename" @keydown.f2.prevent="rename">{{ layer.name }} <small>{{ layer.itemType === 3 ? 'Comp' : 'Layer' }}</small></strong></div>
       <div class="inspector-scroll">
         <LayerReferenceSelect :editor="e" />
+        <LayerSlipControl :editor="e" />
         <section v-for="group in groups.filter(g => inGroup(g.id).length)" :key="group.id" class="inspector-group"><button class="group-heading" :aria-expanded="expanded(group.id)" @click="toggle(group.id)">{{ expanded(group.id) ? '▾' : '▸' }} {{ group.label }}</button>
           <div v-if="expanded(group.id)">
             <PropertyEditorRow v-for="p in inGroup(group.id)" :key="p.id" :editor="e" :property="p.property" />

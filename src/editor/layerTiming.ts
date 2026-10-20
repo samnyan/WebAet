@@ -30,6 +30,15 @@ export function movedLayers(composition: Composition, ids: Set<number>, delta: n
   return composition.layers.map(layer => proposals.get(layer.offset) ?? layer)
 }
 
+/** Slip source sampling only: local(t) gains sourceDelta; own transforms/range remain fixed. */
+export function slippedLayer(layer: Layer, sourceDelta: number): Layer {
+  if (![1, 3].includes(layer.itemType)) throw new Error('仅素材或合成引用支持滑移')
+  if (layer.flags & 32) throw new Error('图层已锁定')
+  const offset = Math.fround(layer.timeOffset + sourceDelta)
+  if (!Number.isFinite(sourceDelta) || !Number.isFinite(offset)) throw new Error('素材帧偏移超出 float32 范围')
+  return { ...layer, timeOffset: offset }
+}
+
 /** Own transforms sample composition time; referenced content samples local time. */
 export function applyLayerTimeEdit(layer: Layer, before: LayerTimeSnapshot, mode: LayerTimeEdit, delta: number) {
   const start = before.start + (mode === 'trim-end' ? 0 : delta)

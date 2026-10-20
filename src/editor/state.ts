@@ -1,6 +1,6 @@
 import { computed, markRaw, ref, shallowRef, toRaw, triggerRef, watch } from 'vue'
 import { createIndependentLayer, removeLayer, reorderLayer, duplicateLayer, duplicateLayers, removeLayers, reorderedLayers, type LayerOrderDirection } from './layerEditing'
-import { movedLayers } from './layerTiming'
+import { slippedLayer, movedLayers } from './layerTiming'
 import { parseAet } from '../core/aet/reader'
 import { writeAet } from '../core/aet/writer'
 import { videoCurve, type AetDocument, type EditableChannel, type Scene } from '../core/aet/types'
@@ -287,6 +287,18 @@ export function createEditor() {
     workspace.requestPause()
     edit(() => { c.layers = next })
   }
+  function slipLayer(id: number, sourceDelta: number) {
+    const c = composition.value
+    if (busy.value || !c || !sourceDelta) return
+    const index = c.layers.findIndex(l => l.offset === id)
+    if (index < 0) return
+    try {
+      const next = slippedLayer(c.layers[index]!, sourceDelta)
+      if (next.timeOffset === c.layers[index]!.timeOffset) return
+      workspace.requestPause()
+      edit(() => { c.layers[index] = next })
+    } catch (cause) { error.value = String(cause) }
+  }
   function moveLayerGroup(ids: Set<number>, delta: number) {
     if (busy.value || !composition.value) return
     try {
@@ -327,7 +339,7 @@ export function createEditor() {
     edit(() => removeLayer(composition.value!, id))
     actions.selectLayer(null)
   }
-  return { moveLayerGroup, moveSelectedLayers, insertLayer, deleteLayer, deleteSelectedLayers, copySelectedLayers, moveLayer, copyLayer, closeDocument, operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
+  return { slipLayer, moveLayerGroup, moveSelectedLayers, insertLayer, deleteLayer, deleteSelectedLayers, copySelectedLayers, moveLayer, copyLayer, closeDocument, operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
     canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }),
     workspace, actions }
 }
