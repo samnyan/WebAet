@@ -162,6 +162,12 @@ The previous timeout was caused by a harness assumption: importing an AET into a
 
 With original menu companions, viewport 1600×1000, opened scene 0 / composition 60 (offset 3264), layer `chara_mainmenu_01_mik` (70752). Expanded the layer and Transform group using workspace state; pointer coordinates were derived from the mounted timeline's actual row/scroll geometry (labels 340px, 3px/frame). Real Playwright mouse down/move/up moved positionX key frame 11 to 30. Actual undo restored the complete original curve and redo restored the complete moved curve. After undo, repeating the drag then dispatching pointercancel preserved the full original curve; dirty=false, error empty, and redo remained available. This checks one real key drag/history/cancel path, not every timeline interaction or directory loading. No source changes or temporary files were required. Concurrent uncommitted resource-library/material-picker work was left untouched.
 
+## Restored current Stage character-preview wiring
+
+Added standalone `MenuCharacterPreview.vue` to the current Stage, reusing the existing exact six-branch recognition/visibility helper. Explicit default is raw/all; the label states preview-only and the accompanying text excludes labels/submenus/independent-clock simulation. No state/editor/property/material-picker files changed.
+
+Mounted original menu companions at scene 0 / ROOT 93 / frame 30. Actual select control switched rhythmgame/custom, yielding only the requested character path (104912/104960), with 73 draw items in each case after a deliberately unrelated layer was hidden. Actual Stage canvas pixels differed. The unrelated hidden layer survived both changes and reset to raw/all; scene JSON remained unchanged, dirty=false, no undo entry. Type checking passed. This restores usable character filtering after the UX migration; it is not whole-branch isolation or complete menu parity. Concurrent material-picker/resource-library work was not staged.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
