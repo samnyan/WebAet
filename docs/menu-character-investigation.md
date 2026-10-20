@@ -172,6 +172,10 @@ Mounted original menu companions at scene 0 / ROOT 93 / frame 30. Actual select 
 
 At HEAD `471d1e8`, original menu companions, scene 0 / composition 60 / layer 70752, expanded Transform. Actual timeline position X input committed displayed value 1277→1287; Inspector immediately read 1287. Actual Inspector input then committed 1297; timeline immediately read 1297. Two actual undo button clicks restored both panels to 1287 then 1277, with dirty=false and error empty. Navigation/expansion used workspace APIs; both value edits used real input fill/Enter/blur. This verifies bidirectional displayed-property synchronization/history, not a specific sampled-frame interpolation result. No code change was needed, and concurrent material-picker files were untouched.
 
+## Timeline scroll/zoom and frame-only invalidation check
+
+Original menu companions, composition 60, expanded Transform, viewport 1600×1000. Actual mouse wheel produced horizontal offset 400 and vertical offset 60. Actual Ctrl+wheel at a nonzero scroll offset changed 3→4.946163812100385 pixels/frame; pointer-anchor frame was 233.33333333333334 before and 233.31212710279297 after (within one screen pixel, native scroll rounding). Across 12 separately rendered frame changes, mounted timeline rows retained identity, the key-canvas raster stayed byte-identical, and instrumented clearRect calls on that canvas stayed zero. Instrumentation was restored. This verifies scroll/anchor and static-track invalidation behavior, not every row hit-test/DPR/resize case or delivered playback FPS. No implementation changes were needed; concurrent material-picker work was untouched.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
