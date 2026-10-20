@@ -4,10 +4,7 @@ import { NButton, NCheckbox, NInputNumber, NSelect } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import { markerSegments } from '../../core/animation/segments'
 import { resolveCurve, resolveLayer } from '../../editor/properties'
-import {
-  buildTimelineRows,
-  TIMELINE_DEFAULT_LABELS_WIDTH,
-} from '../../editor/timelineRows'
+import { buildTimelineRows, TIMELINE_DEFAULT_LABELS_WIDTH } from '../../editor/timelineRows'
 import CurvePreview from './CurvePreview.vue'
 import GraphKeyControls from './GraphKeyControls.vue'
 import WorkAreaControls from './WorkAreaControls.vue'
@@ -23,14 +20,25 @@ const showTools = ref(false)
 const filterAnimated = ref(false)
 const playbackSpeed = ref(1)
 const reverse = ref(false)
-const speedOptions = [0.25, 0.5, 1, 2].map(value => ({ value, label: `${value}×` }))
+const speedOptions = [0.25, 0.5, 1, 2].map((value) => ({ value, label: `${value}×` }))
 
 const collapsed = ref(false)
 const repeat = ref(true)
 const pixels = ref(3)
 const height = ref(260)
-try { const saved = Number(localStorage.getItem('webaet.timeline-height')); if (saved >= 140) height.value = Math.min(saved, innerHeight * 0.7) } catch { /* Optional storage. */ }
-watch(height, value => { try { localStorage.setItem('webaet.timeline-height', String(value)) } catch { /* Optional storage. */ } })
+try {
+  const saved = Number(localStorage.getItem('webaet.timeline-height'))
+  if (saved >= 140) height.value = Math.min(saved, innerHeight * 0.7)
+} catch {
+  /* Optional storage. */
+}
+watch(height, (value) => {
+  try {
+    localStorage.setItem('webaet.timeline-height', String(value))
+  } catch {
+    /* Optional storage. */
+  }
+})
 const labelsWidth = ref(TIMELINE_DEFAULT_LABELS_WIDTH)
 const scrollTop = ref(0)
 const scrollLeft = ref(0)
@@ -47,7 +55,10 @@ const work = useWorkArea(e)
 function setWorkArea(start: number, end: number) {
   if (work.set(start, end)) segmentId.value = 'work'
 }
-function clearWorkArea() { work.clear(); if (segmentId.value === 'work') segmentId.value = 'all' }
+function clearWorkArea() {
+  work.clear()
+  if (segmentId.value === 'work') segmentId.value = 'all'
+}
 
 const segments = computed(() => {
   e.version.value
@@ -58,7 +69,10 @@ const segments = computed(() => {
 const layerRange = computed(() => {
   e.version.value
   const layer = resolveLayer(e, e.workspace.activeLayerRef.value) ?? e.selected.value
-  return layer && Number.isFinite(layer.start) && Number.isFinite(layer.end) && layer.end > layer.start
+  return layer &&
+    Number.isFinite(layer.start) &&
+    Number.isFinite(layer.end) &&
+    layer.end > layer.start
     ? { start: layer.start, end: layer.end }
     : null
 })
@@ -67,28 +81,39 @@ const segmentOptions = computed(() => [
   { value: 'all', label: '完整时间范围' },
   ...(work.area.value ? [{ value: 'work', label: '工作区间（仅预览）' }] : []),
   ...(layerRange.value
-    ? [{ value: 'layer', label: `选中图层 · ${layerRange.value.start}–${layerRange.value.end} f（末端不含）` }]
+    ? [
+        {
+          value: 'layer',
+          label: `选中图层 · ${layerRange.value.start}–${layerRange.value.end} f（末端不含）`,
+        },
+      ]
     : []),
-  ...segments.value.map(s => ({ value: s.id, label: s.label })),
+  ...segments.value.map((s) => ({ value: s.id, label: s.label })),
 ])
 
 const fullRange = computed(() => {
   e.version.value
   const layers = e.composition.value?.layers ?? []
   return {
-    start: Math.min(e.scene.value?.start ?? 0, ...(layers.length ? layers.map(l => l.start) : [0])),
-    end: Math.max(e.scene.value?.end ?? 60, ...(layers.length ? layers.map(l => l.end) : [1]), 1),
+    start: Math.min(
+      e.scene.value?.start ?? 0,
+      ...(layers.length ? layers.map((l) => l.start) : [0]),
+    ),
+    end: Math.max(e.scene.value?.end ?? 60, ...(layers.length ? layers.map((l) => l.end) : [1]), 1),
   }
 })
 
 const range = computed(
   () =>
-    (segmentId.value === 'work' ? work.area.value : segmentId.value === 'layer' ? layerRange.value : segments.value.find(s => s.id === segmentId.value)) ??
-    fullRange.value
+    (segmentId.value === 'work'
+      ? work.area.value
+      : segmentId.value === 'layer'
+        ? layerRange.value
+        : segments.value.find((s) => s.id === segmentId.value)) ?? fullRange.value,
 )
 
-watch(segmentOptions, list => {
-  if (!list.some(s => s.value === segmentId.value)) {
+watch(segmentOptions, (list) => {
+  if (!list.some((s) => s.value === segmentId.value)) {
     segmentId.value = 'all'
   }
 })
@@ -98,7 +123,7 @@ watch(
   () => {
     stop()
     e.frame.value = Math.max(range.value.start, Math.min(range.value.end, e.frame.value))
-  }
+  },
 )
 
 watch(segmentId, () => {
@@ -144,7 +169,7 @@ watch(
     stop()
     e.workspace.activeKey.value = null
     // Composition navigation owns the destination playhead (including Back).
-  }
+  },
 )
 
 watch(
@@ -154,15 +179,15 @@ watch(
     e.workspace.activeKey.value = null
     segmentId.value = 'all'
   },
-  { flush: 'sync' }
+  { flush: 'sync' },
 )
 
 watch(
   () => e.busy.value,
-  busy => {
+  (busy) => {
     if (busy) stop()
   },
-  { flush: 'sync' }
+  { flush: 'sync' },
 )
 
 function visibilityChanged() {
@@ -184,7 +209,8 @@ function tick(now: number) {
 
     if (frame >= range.value.end) {
       if (repeat.value) {
-        frame = range.value.start + ((frame - range.value.start) % (range.value.end - range.value.start))
+        frame =
+          range.value.start + ((frame - range.value.start) % (range.value.end - range.value.start))
       } else {
         e.frame.value = Math.max(range.value.start, range.value.end - 1)
         stop()
@@ -211,7 +237,7 @@ function tick(now: number) {
 
 watch(
   () => e.workspace.playing.value,
-  playing => {
+  (playing) => {
     if (playing) {
       if (!raf) {
         last = performance.now()
@@ -224,7 +250,7 @@ watch(
       }
       last = 0
     }
-  }
+  },
 )
 
 function toggle() {
@@ -237,7 +263,9 @@ function toggle() {
       e.frame.value >= range.value.end ||
       (reverse.value && e.frame.value <= range.value.start)
     ) {
-      e.frame.value = reverse.value ? Math.max(range.value.start, range.value.end - 1) : range.value.start
+      e.frame.value = reverse.value
+        ? Math.max(range.value.start, range.value.end - 1)
+        : range.value.start
     }
     e.workspace.playing.value = true
   }
@@ -268,7 +296,9 @@ function onLabelsWheel(ev: WheelEvent) {
   viewport.value?.handleLabelsWheel(ev)
 }
 
-function resetTimelineLayout() { height.value = 260 }
+function resetTimelineLayout() {
+  height.value = 260
+}
 onMounted(() => window.addEventListener('webaet:reset-layout', resetTimelineLayout))
 onBeforeUnmount(() => window.removeEventListener('webaet:reset-layout', resetTimelineLayout))
 function resize(event: PointerEvent) {
@@ -299,7 +329,7 @@ function keyboard(event: KeyboardEvent) {
   }
   if (
     (event.target as HTMLElement)?.closest(
-      'input,textarea,select,button,[contenteditable=true],[role=combobox],[role=checkbox],[role=dialog]'
+      'input,textarea,select,button,[contenteditable=true],[role=combobox],[role=checkbox],[role=dialog]',
     )
   ) {
     return
@@ -311,7 +341,12 @@ function keyboard(event: KeyboardEvent) {
     event.preventDefault()
     const step = event.shiftKey ? 10 : 1
     const direction = event.key === 'ArrowRight' ? 1 : -1
-    scrub(Math.min(Math.max(range.value.start, range.value.end - 1), Math.round(e.frame.value) + direction * step))
+    scrub(
+      Math.min(
+        Math.max(range.value.start, range.value.end - 1),
+        Math.round(e.frame.value) + direction * step,
+      ),
+    )
   }
 }
 
@@ -329,7 +364,12 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="timeline" :style="{ height: collapsed ? '38px' : `${height}px` }">
-    <div class="timeline-resize" title="拖动调整高度，双击恢复默认" @dblclick="resetTimelineLayout" @pointerdown.prevent="resize" />
+    <div
+      class="timeline-resize"
+      title="拖动调整高度，双击恢复默认"
+      @dblclick="resetTimelineLayout"
+      @pointerdown.prevent="resize"
+    />
     <div class="timeline-toolbar">
       <n-button size="tiny" @click="collapsed = !collapsed">
         {{ collapsed ? '▸' : '▾' }} 时间线
@@ -352,7 +392,7 @@ onBeforeUnmount(() => {
           :max="range.end"
           :precision="2"
           :show-button="false"
-          @update:value="v => v !== null && scrub(v)"
+          @update:value="(v) => v !== null && scrub(v)"
         />
         <span>f</span>
         <n-checkbox v-model:checked="snap" size="small">帧吸附</n-checkbox>
@@ -373,9 +413,21 @@ onBeforeUnmount(() => {
           :options="segmentOptions"
           :disabled="segmentOptions.length < 2"
         />
-        <WorkAreaControls :area="work.area.value" :frame="e.frame.value" :start="fullRange.start" :end="fullRange.end" :disabled="!e.composition.value || e.busy.value" @set="setWorkArea" @clear="clearWorkArea" />
-        <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small">倒放</n-checkbox>
-        <n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
+        <WorkAreaControls
+          :area="work.area.value"
+          :frame="e.frame.value"
+          :start="fullRange.start"
+          :end="fullRange.end"
+          :disabled="!e.composition.value || e.busy.value"
+          @set="setWorkArea"
+          @clear="clearWorkArea"
+        />
+        <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small"
+          >倒放</n-checkbox
+        >
+        <n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small"
+          >曲线预览</n-checkbox
+        >
 
         <n-button
           data-testid="animation-tools"
@@ -388,7 +440,9 @@ onBeforeUnmount(() => {
 
         <div class="spacer" />
 
-        <n-checkbox data-testid="follow-playhead" v-model:checked="followPlayhead" size="small">跟随播放头</n-checkbox>
+        <n-checkbox data-testid="follow-playhead" v-model:checked="followPlayhead" size="small"
+          >跟随播放头</n-checkbox
+        >
         <n-button data-testid="fit-timeline" size="tiny" @click="fitRange">适应范围</n-button>
         <n-button size="tiny" @click="viewport?.setZoom(pixels / 1.4)">−</n-button>
         <n-button size="tiny" @click="viewport?.setZoom(pixels * 1.4)">+</n-button>
@@ -409,6 +463,8 @@ onBeforeUnmount(() => {
         />
         <AetTimelineCanvas
           ref="viewport"
+          :work-area="work.area.value"
+          @work-area-change="setWorkArea"
           :snap="snap"
           :editor="e"
           :rows="rows"
@@ -442,10 +498,7 @@ onBeforeUnmount(() => {
         @select-key="onCurvePreviewSelectKey"
       />
 
-      <AnimationToolsDialog
-        :editor="e"
-        v-model:show="showTools"
-      />
+      <AnimationToolsDialog :editor="e" v-model:show="showTools" />
     </template>
   </section>
 </template>

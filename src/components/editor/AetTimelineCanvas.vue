@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { NDropdown } from 'naive-ui'
+import WorkAreaRuler from './WorkAreaRuler.vue'
+import type { WorkArea } from '../../editor/workArea'
 import type { Editor } from '../../editor/state'
 import type { Keyframe } from '../../core/aet/types'
 import { resolveCurve, type PropertyRef } from '../../editor/properties'
@@ -14,6 +16,7 @@ import { applyLayerTimeEdit, layerTimeDragDelta } from '../../editor/layerTiming
 import type { KeyRef } from '../../editor/propertyActions'
 
 const p = defineProps<{
+  workArea?: WorkArea | null
   snap?: boolean
   editor: Editor
   rows: TimelineRow[]
@@ -29,6 +32,7 @@ const p = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  workAreaChange: [start: number, end: number]
   seek: [frame: number]
   zoom: [pixels: number]
   scroll: [pos: { scrollTop: number; scrollLeft: number }]
@@ -38,6 +42,7 @@ const emit = defineEmits<{
 const scroll = ref<HTMLElement>()
 const canvas = ref<HTMLCanvasElement>()
 const playhead = ref<HTMLElement>()
+const rulerScrollLeft = ref(0)
 
 const ruler = TIMELINE_RULER_HEIGHT
 const row = TIMELINE_ROW_HEIGHT
@@ -92,6 +97,7 @@ function lower(keys: readonly Keyframe[], time: number): number {
 
 function sync() {
   left = scroll.value?.scrollLeft ?? 0
+  rulerScrollLeft.value = left
   top = scroll.value?.scrollTop ?? 0
   emit('scroll', { scrollTop: top, scrollLeft: left })
   schedule()
@@ -1009,6 +1015,17 @@ defineExpose({ fit, setZoom, handleLabelsWheel })
       @select="keyMenuSelect"
       @clickoutside="keyMenu = null"
       @esc="keyMenu = null"
+    />
+    <WorkAreaRuler
+      :area="workArea ?? null"
+      :start="start"
+      :pixels="pixels"
+      :scroll-left="rulerScrollLeft"
+      :labels-width="labelsWidth"
+      :snap="snap !== false"
+      :disabled="disabled"
+      :context="`${editor.workspace.docSession.value}:${editor.sceneIndex.value}:${editor.compositionId.value}`"
+      @change="(start, end) => emit('workAreaChange', start, end)"
     />
     <div ref="playhead" class="aet-timeline-playhead" />
 
