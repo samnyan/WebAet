@@ -6,11 +6,11 @@ export interface ResourceNode {
   asset?: string; sceneIndex?: number; compositionId?: number; preview?: PreviewTarget
 }
 /** Flatten only expanded relationships. Search evaluates labels without decoding resources. */
-export function resourceRows(assets: readonly WorkspaceAsset[], doc: AetDocument | null, library: SpriteLibrary, expanded: ReadonlySet<string>, query: string): ResourceNode[] {
+export function resourceRows(assets: readonly WorkspaceAsset[], doc: AetDocument | null, library: SpriteLibrary, expanded: ReadonlySet<string>, query: string, scope: 'all' | 'files' | 'resources' = 'all'): ResourceNode[] {
   const rows: ResourceNode[] = [], search = query.trim().toLowerCase()
   const matches = (s: string) => s.toLowerCase().includes(search)
   const folders = new Set<string>()
-  for (const asset of assets) {
+  for (const asset of scope === 'resources' ? [] : assets) {
     if (search && !matches(asset.path)) continue
     const parts = asset.path.split('/'); let path = '', visible = true
     for (let i = 0; i < parts.length - 1; i++) {
@@ -20,6 +20,7 @@ export function resourceRows(assets: readonly WorkspaceAsset[], doc: AetDocument
     }
     if (visible || search) rows.push({ key: `file:${asset.path}`, label: `${asset.name}${asset.loaded ? ' · 已加载' : ''}`, depth: parts.length - 1, asset: asset.path })
   }
+  if (scope === 'files') return rows
   doc?.scenes.forEach((scene, si) => {
     const sceneKey = `scene:${si}`, subtree: ResourceNode[] = []
     const map = new Map(scene.compositions.map(c => [c.offset, c]))

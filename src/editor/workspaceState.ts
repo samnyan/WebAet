@@ -21,7 +21,7 @@ export interface WorkspaceState {
   activeProperty: Ref<PropertyRef | null>
   activeKey: Ref<KeyRef | null>
   playing: Ref<boolean>
-  leftTab: Ref<'library' | 'layers'>
+  leftTab: Ref<'library' | 'resources' | 'layers'>
   rightTab: Ref<'scene' | 'inspector'>
   docSession: Ref<number>
   expandedSets: Ref<Map<string, Set<string>>>
@@ -40,7 +40,7 @@ export function createWorkspaceState(editor: WorkspaceEditorContext): WorkspaceS
   const activeProperty = ref<PropertyRef | null>(null)
   const activeKey = ref<KeyRef | null>(null)
   const playing = ref(false)
-  const leftTab = ref<'library' | 'layers'>('layers')
+  const leftTab = ref<'library' | 'resources' | 'layers'>('layers')
   const rightTab = ref<'scene' | 'inspector'>('inspector')
   const docSession = ref(0)
   const expandedSets = ref<Map<string, Set<string>>>(new Map())

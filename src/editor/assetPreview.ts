@@ -6,7 +6,7 @@ import { drawItems } from '../core/render/canvas'
 /** One bounded preview surface; atlas decoding stays owned by SpriteLibrary. */
 export function renderAssetPreview(editor: Editor, target: PreviewTarget, size = 160) {
   const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = Math.max(32, Math.min(256, size))
+  canvas.width = canvas.height = Math.max(32, Math.min(1600, size))
   const ctx = canvas.getContext('2d')!
   let description = '', width = 0, height = 0
   if (target.kind === 'composition') {
