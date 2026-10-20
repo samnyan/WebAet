@@ -150,6 +150,14 @@ Added framework-independent `src/core/render/instances.ts`: callers explicitly s
 
 Mounted original-companion verification: scene 0 / ROOT 93, arcade active and mix active, each sampled at frames 10/30/60/89 with the other `_off` instance frozen at frame 6. All eight results matched the complete ordered concatenation and native-size PNG pixels of separately evaluated reference objects; inactive draw items stayed unchanged, active composite pixels varied, and the scene JSON remained unchanged. Results contained 5 items at frame 10 and 7 at the other samples. Empty-instance output was also checked. `pnpm exec vue-tsc --noEmit` passed. These are independent-clock/compositor checks, not game draw-order parity or a mounted Stage menu simulator; the existing runtime-binding diagnostic remains.
 
+## Post-refactor Inspector/download/fresh-page acceptance
+
+At HEAD `fc0712e`, imported the original menu AET/FARC/sprite database in the served editor, selected scene 0 / ROOT 93 / `chara_mainmenu_rhythmgame` (layer 104912), frame 30. Actual Inspector input changed position X from 1344.5069580078125 to 1364.5069580078125; Enter/blur committed, and the actual undo/redo buttons restored both expected values. The actual Export AET button downloaded 115116 bytes.
+
+Opened those downloaded bytes in a second clean page, then imported the original Sprite companions. Inspector read back 1364.5069580078125, dirty=false, error empty. Original edited page remained dirty=true (export does not mark the source document saved). Native transparent selected-branch PNG output matched before/after reopen: SHA-256 `fb14dcf886d20a18b6dcef5ad6c22fe6d1ac4710e1c2fb5523e23d8d7534ab16`. Both renders retained the known source-less/runtime-binding warning. Selection was set through workspace APIs; property editing/history/download used actual UI controls. Pixel comparison used the production frame renderer, not a screenshot of Stage.
+
+The previous timeout was caused by a harness assumption: importing an AET into an already open editor updates available documents but does not automatically open it (`importFiles` only calls open when there is no current doc). No implementation change was necessary for this fresh-page readback. This closes the targeted post-refactor Inspector/edit/download/reopen check, not the directory-picker workflow, timeline key dragging, complete menu simulation or game parity. Browser pages were closed and no temporary harness/output files were added.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
