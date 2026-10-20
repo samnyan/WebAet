@@ -4,6 +4,7 @@ import { NButton, NCheckbox, NPopover } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import MenuCharacterPreview from './MenuCharacterPreview.vue'
 import { translationGizmo, localTranslation } from '../../editor/translationGizmo'
+import { previewTranslation } from '../../editor/translationPreview'
 import { createSceneEvaluator } from '../../core/render/evaluate'
 import { createInstanceEvaluator } from '../../core/render/instances'
 import { renderSceneFrame } from '../../core/render/frame'
@@ -176,7 +177,17 @@ function draw() {
           ? { x: s.width / 2, y: s.height / 2, distance: Math.max(s.width, s.height) * 1.5 }
           : undefined,
       )
-  const result = drawItems(ctx, evaluated.items, e.library, e.selectedId.value, wireframe.value)
+  const previewItems =
+    axisDrag && e.composition.value
+      ? previewTranslation(
+          evaluated.items,
+          e.composition.value,
+          axisDrag.layer,
+          axisDrag.dx,
+          axisDrag.dy,
+        )
+      : evaluated.items
+  const result = drawItems(ctx, previewItems, e.library, e.selectedId.value, wireframe.value)
   hits = result.hits
   ctx.restore()
   if (view3D.value && !perspective.value)
