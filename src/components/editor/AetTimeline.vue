@@ -9,6 +9,7 @@ import {
   TIMELINE_DEFAULT_LABELS_WIDTH,
 } from '../../editor/timelineRows'
 import CurvePreview from './CurvePreview.vue'
+import GraphKeyControls from './GraphKeyControls.vue'
 import WorkAreaControls from './WorkAreaControls.vue'
 import { useWorkArea } from '../../editor/workArea'
 import AetTimelineCanvas from './AetTimelineCanvas.vue'
@@ -427,6 +428,7 @@ onBeforeUnmount(() => {
         />
       </div>
 
+      <GraphKeyControls v-if="showCurve" :editor="e" />
       <CurvePreview
         v-if="showCurve"
         :curve="activeCurve"

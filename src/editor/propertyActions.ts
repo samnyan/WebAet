@@ -34,6 +34,7 @@ export interface PropertyActions {
   addKey(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }): void
   removeKey(keyRef: KeyRef): void
   moveKey(keyRef: KeyRef, nextFrame: number): void
+  updateKey(keyRef: KeyRef, frame: number, value: number, tangent: number): void
   setKeyValue(keyRef: KeyRef, value: number): void
   setKeyTangent(keyRef: KeyRef, value: number): void
   jumpKey(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }, direction: -1 | 1): void
@@ -243,6 +244,21 @@ export function createPropertyActions(
       curve.keys = keys
     })
     workspace.activeKey.value = { property: keyRef.property, frame: toTime }
+  }
+
+  function updateKey(keyRef: KeyRef, frame: number, value: number, tangent: number): void {
+    if (editor.busy.value) return
+    const ctx = resolveLayerContext(editor, keyRef.property), curve = resolveCurve(editor, keyRef.property)
+    if (!ctx || !curve || (ctx.layer.flags & 32)) return
+    const index = curve.keys.findIndex(k => Math.fround(k.frame) === Math.fround(keyRef.frame))
+    if (index < 0) { editor.error.value = '关键帧已失效'; return }
+    const next = { frame: Math.fround(frame), value: Math.fround(value), tangent: Math.fround(tangent) }
+    if (!Object.values(next).every(Number.isFinite)) { editor.error.value = '关键帧参数必须是有限 float32'; return }
+    if (curve.keys.length === 1 && next.frame !== curve.keys[index]!.frame) { editor.error.value = '常量轨道不能修改关键帧时间'; return }
+    if (curve.keys.some((k, i) => i !== index && Math.fround(k.frame) === next.frame)) { editor.error.value = '目标时间已有关键帧'; return }
+    workspace.requestPause()
+    editor.edit(() => { curve.keys = curve.keys.map((k, i) => i === index ? next : k).sort((a, b) => a.frame - b.frame) })
+    selectKeys([{ property: keyRef.property, frame: next.frame }])
   }
 
   function setKeyValue(keyRef: KeyRef, value: number): void {
@@ -470,6 +486,7 @@ export function createPropertyActions(
   }
 
   return {
+    updateKey,
     copySelectedKeys,
     pasteSelectedKeys,
     selectKeys,
