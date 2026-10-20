@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { NInput, NSelect, NCheckbox, NVirtualList } from 'naive-ui'
+import { compositionLabels } from '../../editor/compositionLabels'
 import type { Editor } from '../../editor/state'
 import { menuCharacterBranches, menuCharacterVisibility } from '../../editor/menuCharacterPreview'
 import { layerTreeRows, type LayerTreeRow } from '../../editor/layerTree'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const search = ref(''), list = ref<InstanceType<typeof NVirtualList>>()
 const rows = computed(() => { e.version.value; return layerTreeRows(e.scene.value, e.sceneIndex.value, e.compositionId.value, key => e.workspace.isExpanded(key, 'layers'), search.value) })
-const options = computed(() => { e.version.value; return e.scene.value?.compositions.map((c, i) => ({ value: c.offset, label: `${i === e.scene.value!.compositions.length - 1 ? 'ROOT' : `Comp ${i}`} · ${c.layers.length}` })) ?? [] })
+const options = computed(() => { e.version.value; const scene = e.scene.value; if (!scene) return []; const labels = compositionLabels(scene); return scene.compositions.map(c => ({ value: c.offset, label: labels.get(c.offset)! })) })
 const breadcrumbs = computed(() => {
   e.version.value
   const scene = e.scene.value, root = scene?.compositions.at(-1)
