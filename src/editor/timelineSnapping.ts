@@ -63,6 +63,18 @@ export function snapTimelineFrame(
   return enabled ? (nearestTarget(value, targets, pixels, tolerance) ?? Math.round(value)) : value
 }
 
+/** A guide is shown only for an exact candidate match, not a grid-only result. */
+export function timelineSnapGuide(
+  values: readonly number[],
+  targets: readonly number[],
+): number | undefined {
+  for (const value of values) {
+    const target = nearestTarget(value, targets, 1, 1e-7)
+    if (target !== undefined) return target
+  }
+  return undefined
+}
+
 /** Compare both moving edges; start wins equal-distance ties. Keep one delta for the whole group. */
 export function snapTimelineMove(
   start: number,

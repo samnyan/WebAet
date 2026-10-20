@@ -18,6 +18,7 @@ import {
   timelineSnapTargets,
   snapTimelineFrame,
   snapTimelineMove,
+  timelineSnapGuide,
 } from '../../editor/timelineSnapping'
 
 const p = defineProps<{
@@ -77,6 +78,7 @@ let drag: {
   original: number
   target: number
   snapTargets?: number[]
+  snapGuide?: number
   marqueeBase?: KeyRef[]
   keyGroup?: KeyRef[]
   keyRef?: KeyRef
@@ -398,7 +400,20 @@ function draw() {
     ctx.lineTo(x, height)
     ctx.stroke()
   }
+  if (drag?.snapGuide !== undefined) {
+    const x = label + (drag.snapGuide - p.start) * p.pixels - left
+    ctx.strokeStyle = '#efc879'
+    ctx.setLineDash([4, 3])
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, height)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.fillStyle = '#efc879'
+    ctx.fillText(`${Number(drag.snapGuide.toFixed(3))} f`, x + 5, ruler / 2)
+  }
   ctx.restore()
+  c.dataset.snapGuide = drag?.snapGuide === undefined ? '' : String(drag.snapGuide)
 
   c.dataset.paintedKeys = String(painted)
   c.dataset.visibleRows = String(Math.max(0, last - first))
@@ -669,6 +684,18 @@ function down(e: PointerEvent) {
   drag = null
 }
 
+function updateSnapGuide() {
+  if (!drag) return
+  const before = drag.layerDrag
+  const values = before
+    ? drag.mode === 'layer-move'
+      ? [before.start + drag.target, before.end + drag.target]
+      : [(drag.mode === 'trim-end' ? before.end : before.start) + drag.target]
+    : drag.mode === 'key'
+      ? [drag.target]
+      : []
+  drag.snapGuide = p.snap === false ? undefined : timelineSnapGuide(values, drag.snapTargets ?? [])
+}
 function updateDrag() {
   if (!drag || drag.mode === 'pan' || drag.mode === 'resize-labels') return
   if (drag.mode === 'marquee') {
@@ -712,6 +739,7 @@ function updateDrag() {
   } else {
     seek(at(drag.x))
   }
+  updateSnapGuide()
 }
 
 function autoScroll() {
