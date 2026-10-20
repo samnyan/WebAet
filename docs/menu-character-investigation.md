@@ -196,6 +196,10 @@ A separate real-menu check reproduced stale drag submission after undo replaced 
 
 At HEAD `6f87342`, actual file input imported original `spr_nswgam_menu.farc`; Project tab → browser entry opened the shared ResourceBrowser. Archive package showed 83 Sprite entries and the real `spr_nswgam_menu.bin` directory (not invented name folders). At the sampled instant the virtual grid mounted 25 cells and 15 decoded 112×112 canvases, all with nontransparent pixels; remaining thumbnails were still deferred. Actual search showed no matches for an absent token, 8 matches for CHARA_MAINMENU_01, and restored entries after clearing. Actual directory click retained 83 entries; switching to the loaded-set package also showed 83 with no browser error. Initial harness role selectors did not match tab/input markup and were corrected; no implementation defect was established. This closes a scoped original-archive browse/search/folder/thumbnail-presence gap, not exact Sprite crop parity, all-grid completion, directory-handle authorization or worker texture decoding. Pages closed, no temporary artifacts.
 
+## Original Sprite thumbnail crop comparison
+
+Actual shared browser searched CHARA_MAINMENU_01 in the original menu FARC; all eight resulting mounted thumbnail canvases matched every RGBA byte of separately decoded TXP atlas rectangle draws at the same 112px aspect-fit size. Reference explicitly converts bottom-up TXP rows to the top-left Sprite coordinate convention before cropping. An initial unflipped reference mismatched as expected; correcting that reference produced eight exact matches, without changing implementation. This compares browser crop/placement/orientation against the existing decoder and coordinate convention, not an independent decoder or game capture. Temporary canvases/pages were released with browser close; no files added.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
