@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import MaterialPickerDialog from './MaterialPickerDialog.vue'
 import type { Editor } from '../../editor/state'
 import { listLayerProperties, type PropertyGroupId } from '../../editor/properties'
@@ -30,7 +30,11 @@ const preview = computed<PreviewTarget | null>(() => {
   const index = video.sources.length <= 1 ? 0 : Math.trunc(((e.frame.value - l.start) * l.timeScale + l.timeOffset) * video.frames + .0001)
   return { kind: 'source', sceneIndex, videoId: video.offset, sourceIndex: index }
 })
-const expanded = (id: string) => !e.workspace.isExpanded(`closed:${id}`, 'inspector')
+const renaming = ref(false), nameDraft = ref(''), nameInput = ref<HTMLInputElement>()
+async function rename() { if (!layer.value || e.busy.value || (layer.value.flags & 32)) return; nameDraft.value = layer.value.name; renaming.value = true; await nextTick(); nameInput.value?.focus(); nameInput.value?.select() }
+function commitName() { if (!renaming.value) return; renaming.value = false; if (name.value && nameDraft.value.trim()) e.actions.setValue(name.value.property, nameDraft.value) }
+watch(() => [e.workspace.activeLayerRef.value, e.version.value], () => renaming.value = false)
+const expanded = (id: string) => !['layer', 'markers'].includes(id) && !e.workspace.isExpanded(`closed:${id}`, 'inspector') || ['layer', 'markers'].includes(id) && e.workspace.isExpanded(`closed:${id}`, 'inspector')
 const toggle = (id: string) => e.workspace.toggleExpanded(`closed:${id}`, 'inspector')
 </script>
 <template>
@@ -38,7 +42,7 @@ const toggle = (id: string) => e.workspace.toggleExpanded(`closed:${id}`, 'inspe
     <div class="inspector-tabs" role="tablist" aria-label="属性面板"><button role="tab" :aria-selected="e.workspace.rightTab.value === 'scene'" @click="e.workspace.rightTab.value = 'scene'">场景 / Scene</button><button role="tab" :aria-selected="e.workspace.rightTab.value === 'inspector'" @click="e.workspace.rightTab.value = 'inspector'">效果 / Effects</button></div>
     <div v-if="e.workspace.rightTab.value === 'scene'" class="inspector-scroll"><SceneInspector :editor="e" /></div>
     <template v-else-if="layer">
-      <div class="sticky-layer"><strong :title="layer.name">{{ layer.name }}</strong><small>{{ layer.itemType === 3 ? 'Comp' : 'Layer' }} · 0x{{ layer.offset.toString(16) }}</small><PropertyEditorRow v-if="name" :editor="e" :property="name.property" /></div>
+      <div class="sticky-layer"><input v-if="renaming" ref="nameInput" v-model="nameDraft" aria-label="图层名称" @blur="commitName" @keydown.enter.prevent="commitName" @keydown.esc.prevent="renaming = false" /><strong v-else :title="`${layer.name} · 双击重命名 · 0x${layer.offset.toString(16)}`" tabindex="0" @dblclick="rename" @keydown.f2.prevent="rename">{{ layer.name }} <small>{{ layer.itemType === 3 ? 'Comp' : 'Layer' }}</small></strong></div>
       <div class="inspector-scroll">
         <section v-for="group in groups.filter(g => inGroup(g.id).length)" :key="group.id" class="inspector-group"><button class="group-heading" :aria-expanded="expanded(group.id)" @click="toggle(group.id)">{{ expanded(group.id) ? '▾' : '▸' }} {{ group.label }}</button>
           <div v-if="expanded(group.id)">

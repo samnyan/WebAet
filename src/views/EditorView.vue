@@ -17,7 +17,8 @@ import AetStage from '../components/editor/AetStage.vue'
 import AetTimeline from '../components/editor/AetTimeline.vue'
 import EditorStatusBar from '../components/editor/EditorStatusBar.vue'
 const e = createEditor(), { locale, t } = useI18n()
-const { host: workspaceHost, style: panelStyle, start: resizePanel } = usePanelSizes()
+const { host: workspaceHost, style: panelStyle, start: resizePanel, reset: resetPanels } = usePanelSizes()
+function resetLayout() { resetPanels(); window.dispatchEvent(new Event('webaet:reset-layout')) }
 const input = ref<HTMLInputElement>(), warnings = ref<string[]>([])
 const resourceWarnings = computed(() => { e.version.value; e.resourceVersion.value; return unresolvedSpriteSources(e.doc.value, e.library) })
 const allWarnings = computed(() => [...warnings.value, ...resourceWarnings.value])
@@ -112,10 +113,11 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
       <n-select class="scene-select" size="tiny" :disabled="e.busy.value" :value="e.sceneIndex.value" :options="scenes" placeholder="Scene" @update:value="e.selectScene" />
       <div class="spacer" /><span v-if="e.dirty.value" class="dirty">●</span><n-button size="tiny" :disabled="e.busy.value || !e.canUndo.value" @click="e.undo">撤销</n-button><n-button size="tiny" :disabled="e.busy.value || !e.canRedo.value" @click="e.redo">重做</n-button>
       <n-button size="tiny" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('保存工程', e.saveProject)">保存工程</n-button><n-button size="tiny" type="primary" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('导出 AET', e.exportBinary)">导出 AET</n-button>
+      <n-button size="tiny" @click="resetLayout">重置布局</n-button>
       <n-button size="tiny" @click="locale = locale === 'zh-CN' ? 'en' : 'zh-CN'">{{ t('language') }}</n-button>
     </div>
     <input ref="input" hidden type="file" multiple accept=".bin,.farc,.webaet" @change="filesChanged" />
-    <n-spin :show="e.busy.value" class="workspace-spin"><div :ref="el => workspaceHost = el as HTMLElement | undefined" class="workspace" :style="panelStyle"><LeftSidebar :editor="e" :assets="libraryAssets" @open-asset="changeAsset" @open-composition="openComposition" /><div class="panel-divider" role="separator" aria-label="调整左侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'left')" /><AetStage :editor="e" @warnings="warnings = $event" /><div class="panel-divider" role="separator" aria-label="调整右侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'right')" /><LayerInspector :editor="e" /></div></n-spin>
+    <n-spin :show="e.busy.value" class="workspace-spin"><div :ref="el => workspaceHost = el as HTMLElement | undefined" class="workspace" :style="panelStyle"><LeftSidebar :editor="e" :assets="libraryAssets" @open-asset="changeAsset" @open-composition="openComposition" /><div class="panel-divider" role="separator" title="拖动调整宽度，双击恢复默认" @dblclick="resetPanels" aria-label="调整左侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'left')" /><AetStage :editor="e" @warnings="warnings = $event" /><div class="panel-divider" role="separator" title="拖动调整宽度，双击恢复默认" @dblclick="resetPanels" aria-label="调整右侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'right')" /><LayerInspector :editor="e" /></div></n-spin>
     <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" :disabled="e.busy.value" @click="input?.click()">打开 AET / Sprite</n-button></div>
     <AetTimeline :editor="e" />
     <EditorStatusBar :editor="e" :warnings="allWarnings" :progress="progress" @cancel="scanController?.abort(); loadController?.abort()" />

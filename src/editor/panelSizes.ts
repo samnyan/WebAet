@@ -16,6 +16,7 @@ export function usePanelSizes() {
     }
   }
   function save() { try { localStorage.setItem(key, JSON.stringify({ left: left.value, right: right.value })) } catch { /* Optional persistence. */ } }
+  function reset() { left.value = 270; right.value = 330; fit(); save() }
   let cleanup: (() => void) | undefined
   function start(event: PointerEvent, side: 'left' | 'right') {
     if (event.button !== 0) return
@@ -36,5 +37,5 @@ export function usePanelSizes() {
   onMounted(() => { observer = new ResizeObserver(fit); if (host.value) observer.observe(host.value); fit() })
   onBeforeUnmount(() => { cleanup?.(); observer?.disconnect() })
   const style = computed(() => ({ gridTemplateColumns: `${left.value}px 6px minmax(160px,1fr) 6px ${right.value}px` }))
-  return { host, style, start }
+  return { host, style, start, reset }
 }

@@ -26,6 +26,8 @@ const collapsed = ref(false)
 const repeat = ref(true)
 const pixels = ref(3)
 const height = ref(260)
+try { const saved = Number(localStorage.getItem('webaet.timeline-height')); if (saved >= 140) height.value = Math.min(saved, innerHeight * 0.7) } catch { /* Optional storage. */ }
+watch(height, value => { try { localStorage.setItem('webaet.timeline-height', String(value)) } catch { /* Optional storage. */ } })
 const labelsWidth = ref(TIMELINE_DEFAULT_LABELS_WIDTH)
 const scrollTop = ref(0)
 const scrollLeft = ref(0)
@@ -257,6 +259,9 @@ function onLabelsWheel(ev: WheelEvent) {
 }
 
 function resize(event: PointerEvent) {
+function resetTimelineLayout() { height.value = 260 }
+onMounted(() => window.addEventListener('webaet:reset-layout', resetTimelineLayout))
+onBeforeUnmount(() => window.removeEventListener('webaet:reset-layout', resetTimelineLayout))
   const y = event.clientY
   const h = height.value
   const move = (ev: PointerEvent) => {
@@ -314,7 +319,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="timeline" :style="{ height: collapsed ? '38px' : `${height}px` }">
-    <div class="timeline-resize" @pointerdown.prevent="resize" />
+    <div class="timeline-resize" title="拖动调整高度，双击恢复默认" @dblclick="resetTimelineLayout" @pointerdown.prevent="resize" />
     <div class="timeline-toolbar">
       <n-button size="tiny" @click="collapsed = !collapsed">
         {{ collapsed ? '▸' : '▾' }} 时间线
