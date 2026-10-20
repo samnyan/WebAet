@@ -1085,6 +1085,10 @@ defineExpose({ fit, setZoom, handleLabelsWheel })
       @esc="keyMenu = null"
     />
     <WorkAreaRuler
+      :capture-targets="
+        () =>
+          editor.composition.value ? timelineSnapTargets(editor.composition.value, new Set()) : []
+      "
       :area="workArea ?? null"
       :start="start"
       :pixels="pixels"

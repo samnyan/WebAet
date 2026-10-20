@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { WorkArea } from '../../editor/workArea'
+import { snapTimelineFrame } from '../../editor/timelineSnapping'
 const p = defineProps<{
+  captureTargets?: () => readonly number[]
   area: WorkArea | null
   start: number
   pixels: number
@@ -19,6 +21,7 @@ let drag: {
   x: number
   original: WorkArea
   pixels: number
+  targets: readonly number[]
 } | null = null
 const shown = computed(() => draft.value ?? p.area)
 const x = (frame: number) => (frame - p.start) * p.pixels - p.scrollLeft
@@ -32,7 +35,14 @@ function down(event: PointerEvent, side: 'start' | 'end') {
   const button = event.currentTarget as HTMLButtonElement
   button.focus()
   button.setPointerCapture(event.pointerId)
-  drag = { id: event.pointerId, side, x: event.clientX, original: { ...p.area }, pixels: p.pixels }
+  drag = {
+    id: event.pointerId,
+    side,
+    x: event.clientX,
+    original: { ...p.area },
+    pixels: p.pixels,
+    targets: p.captureTargets?.() ?? [],
+  }
 }
 function move(event: PointerEvent) {
   if (!drag || drag.id !== event.pointerId) return
@@ -42,10 +52,10 @@ function move(event: PointerEvent) {
     return
   }
   const raw = original[side] + (event.clientX - drag.x) / drag.pixels
-  const value = p.snap ? Math.round(raw) : raw
+  const value = snapTimelineFrame(raw, drag.targets, drag.pixels, p.snap)
   if (!Number.isFinite(value)) return
   const next = { ...original, [side]: value }
-  if (next.end > next.start) draft.value = next
+  draft.value = next.end > next.start ? next : null
 }
 function up(event: PointerEvent) {
   if (!drag || drag.id !== event.pointerId) return
