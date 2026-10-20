@@ -25,16 +25,13 @@ export function timelineSnapTargets(
   return [...times].filter(Number.isFinite).sort((a, b) => a - b)
 }
 
-/** Screen-space tolerance, binary nearest lookup; magnetic targets take precedence over the frame grid. */
-export function snapTimelineFrame(
+function nearestTarget(
   value: number,
   targets: readonly number[],
   pixels: number,
-  enabled: boolean,
   tolerance = 7,
-): number {
-  if (!enabled) return value
-  if (!Number.isFinite(value) || !Number.isFinite(pixels) || pixels <= 0) return Math.round(value)
+): number | undefined {
+  if (!Number.isFinite(value) || !Number.isFinite(pixels) || pixels <= 0) return undefined
   let low = 0,
     high = targets.length
   while (low < high) {
@@ -52,5 +49,36 @@ export function snapTimelineFrame(
     )
       nearest = target
   }
-  return nearest ?? Math.round(value)
+  return nearest
+}
+
+/** Screen-space tolerance, binary nearest lookup; magnetic targets take precedence over the frame grid. */
+export function snapTimelineFrame(
+  value: number,
+  targets: readonly number[],
+  pixels: number,
+  enabled: boolean,
+  tolerance = 7,
+): number {
+  return enabled ? (nearestTarget(value, targets, pixels, tolerance) ?? Math.round(value)) : value
+}
+
+/** Compare both moving edges; start wins equal-distance ties. Keep one delta for the whole group. */
+export function snapTimelineMove(
+  start: number,
+  end: number,
+  movement: number,
+  targets: readonly number[],
+  pixels: number,
+  enabled: boolean,
+): number {
+  if (!enabled) return movement
+  let correction: number | undefined
+  for (const edge of [start, end]) {
+    const target = nearestTarget(edge + movement, targets, pixels)
+    if (target === undefined) continue
+    const delta = target - edge - movement
+    if (correction === undefined || Math.abs(delta) < Math.abs(correction)) correction = delta
+  }
+  return correction === undefined ? Math.round(start + movement) - start : movement + correction
 }

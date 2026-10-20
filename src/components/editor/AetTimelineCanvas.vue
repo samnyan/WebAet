@@ -14,7 +14,11 @@ import {
 } from '../../editor/timelineRows'
 import { applyLayerTimeEdit, layerTimeDragDelta } from '../../editor/layerTiming'
 import type { KeyRef } from '../../editor/propertyActions'
-import { timelineSnapTargets, snapTimelineFrame } from '../../editor/timelineSnapping'
+import {
+  timelineSnapTargets,
+  snapTimelineFrame,
+  snapTimelineMove,
+} from '../../editor/timelineSnapping'
 
 const p = defineProps<{
   workArea?: WorkArea | null
@@ -672,7 +676,16 @@ function updateDrag() {
     return
   }
   if (drag.layerDrag) {
-    if (drag.mode === 'trim-start' || drag.mode === 'trim-end' || drag.mode === 'layer-move') {
+    if (drag.mode === 'layer-move') {
+      drag.target = snapTimelineMove(
+        drag.layerDrag.start,
+        drag.layerDrag.end,
+        at(drag.x) - drag.anchor,
+        drag.snapTargets ?? [],
+        p.pixels,
+        p.snap !== false,
+      )
+    } else if (drag.mode === 'trim-start' || drag.mode === 'trim-end') {
       drag.target = layerTimeDragDelta(
         drag.layerDrag,
         drag.mode,
