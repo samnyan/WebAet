@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from 'vue'
 import type { Editor } from '../../editor/state'
+import {
+  timelineSnapTargets,
+  snapTimelineFrame,
+  timelineSnapGuide,
+} from '../../editor/timelineSnapping'
 import type { KeyRef } from '../../editor/propertyActions'
 import type { Curve } from '../../core/aet/types'
 import { curveGraph } from '../../core/animation/curveGraph'
@@ -21,6 +26,8 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ scrub: [frame: number]; selectKey: [index: number] }>()
 const drag = shallowRef<{
+  targets: number[]
+  guide?: number
   mode: 'key' | 'tangent'
   dt: number
   id: number
@@ -138,6 +145,13 @@ function beginKey(event: PointerEvent, index: number, mode: 'key' | 'tangent' = 
   svg.focus()
   svg.setPointerCapture(event.pointerId)
   drag.value = {
+    targets: e.composition.value
+      ? timelineSnapTargets(
+          e.composition.value,
+          new Set(),
+          new Map([[props.curve!, new Set([Math.fround(key.frame)])]]),
+        )
+      : [],
     mode,
     dt,
     id: event.pointerId,
@@ -170,12 +184,14 @@ function moveKey(event: PointerEvent) {
   const raw =
     key.frame +
     ((((event.clientX - d.x) / r.width) * 600) / 576) * (time.value.end - time.value.start)
-  const frame = Math.fround(props.snap === false ? raw : Math.round(raw))
+  const pixels = (r.width * 576) / 600 / (time.value.end - time.value.start)
+  const frame = Math.fround(snapTimelineFrame(raw, d.targets, pixels, props.snap !== false))
   const scale = d.high === d.low ? 1 : (d.high - d.low) / 56
   const value = Math.fround(key.value - ((event.clientY - d.y) / r.height) * 84 * scale)
   drag.value = {
     ...d,
     frame,
+    guide: props.snap !== false ? timelineSnapGuide([frame], d.targets) : undefined,
     value,
     moved: Math.abs(event.clientX - d.x) > 3 || Math.abs(event.clientY - d.y) > 3,
   }
@@ -291,6 +307,29 @@ const playhead = computed(
       @wheel.prevent.stop="wheel"
       @dblclick.self="resetView"
     >
+      <g
+        v-if="drag?.guide !== undefined"
+        data-testid="graph-snap-guide"
+        style="pointer-events: none"
+      >
+        <line
+          :x1="12 + ((drag.guide - time.start) / (time.end - time.start)) * 576"
+          :x2="12 + ((drag.guide - time.start) / (time.end - time.start)) * 576"
+          y1="0"
+          y2="84"
+          stroke="#ffd480"
+          stroke-dasharray="3 3"
+          vector-effect="non-scaling-stroke"
+        />
+        <text
+          :x="12 + ((drag.guide - time.start) / (time.end - time.start)) * 576 + 5"
+          y="11"
+          fill="#ffd480"
+          font-size="10"
+        >
+          {{ drag.guide }} f
+        </text>
+      </g>
       <path
         :d="graph.path"
         fill="none"
