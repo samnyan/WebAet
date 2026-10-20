@@ -4,6 +4,7 @@ import { NButton, NCheckbox } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import MenuCharacterPreview from './MenuCharacterPreview.vue'
 import { createSceneEvaluator } from '../../core/render/evaluate'
+import { createInstanceEvaluator } from '../../core/render/instances'
 import { renderSceneFrame } from '../../core/render/frame'
 import { drawItems, hitTest, type HitArea } from '../../core/render/canvas'
 import { identity4, multiply4, layerMatrix4, orthographicMatrix } from '../../core/animation/transform3d'
@@ -15,6 +16,16 @@ const perspective = ref(false), transparentExport = ref(false)
 const multipleBranches = computed(() => { e.version.value; return !isolate.value && (e.composition.value?.layers.filter(l => l.itemType === 3 && !!(l.flags & 1) && e.frame.value >= l.start && e.frame.value < l.end).length ?? 0) > 1 })
 const view3D = ref(false), yaw = ref(25), pitch = ref(-20)
 const evaluator = computed(() => { e.version.value; return e.scene.value ? createSceneEvaluator(e.scene.value) : null })
+const secondaryChoice = ref('')
+const secondaryLayers = computed(() => {
+  e.version.value
+  const names = ['arcade_mode_on', 'arcade_mode_off', 'mix_mode_on', 'mix_mode_off']
+  const layers = names.map(name => e.composition.value?.layers.find(l => l.itemType === 3 && l.name === `nsw_menu_selector_${name}`))
+  return layers.every(l => l !== undefined) ? layers : []
+})
+const instanceEvaluator = computed(() => { e.version.value; return e.scene.value ? createInstanceEvaluator(e.scene.value) : null })
+const secondaryEnabled = computed(() => !!secondaryChoice.value && secondaryLayers.value.length === 4 && !view3D.value && !isolate.value)
+watch(() => [e.doc.value, e.sceneIndex.value, e.compositionId.value], () => { secondaryChoice.value = '' })
 let resize: ResizeObserver, hits: HitArea[] = [], scale = 1, origin = { x: 0, y: 0 }, raf = 0
 let previousWarnings: string[] = []
 function draw() {
@@ -29,7 +40,13 @@ function draw() {
   ctx.translate(origin.x, origin.y); ctx.scale(scale, scale)
   if (!view3D.value) { ctx.fillStyle = `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`; ctx.fillRect(0, 0, s.width, s.height) }
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, s.width, s.height); if (!view3D.value) ctx.clip()
-  const evaluated = evaluator.value!(e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height, yaw.value, pitch.value) : identity4(), view3D.value && perspective.value ? { x: s.width / 2, y: s.height / 2, distance: Math.max(s.width, s.height) * 1.5 } : undefined)
+  const evaluated = secondaryEnabled.value ? instanceEvaluator.value!([
+    // Preserve unrelated ROOT content; the two preview objects are explicitly
+    // drawn above it. This is not a claim about the game's object draw order.
+    { composition: e.compositionId.value, frame: e.frame.value, branch: null, hidden: new Set([...e.hidden.value, ...secondaryLayers.value.map(l => l!.offset)]) },
+    { composition: e.compositionId.value, frame: 6, branch: secondaryLayers.value[secondaryChoice.value === 'arcade' ? 3 : 1]!.offset, hidden: e.hidden.value },
+    { composition: e.compositionId.value, frame: Math.max(10, Math.min(90, e.frame.value)), branch: secondaryLayers.value[secondaryChoice.value === 'arcade' ? 0 : 2]!.offset, hidden: e.hidden.value },
+  ]) : evaluator.value!(e.compositionId.value, e.frame.value, e.hidden.value, isolate.value ? e.selectedId.value : null, view3D.value ? observationMatrix(s.width, s.height, yaw.value, pitch.value) : identity4(), view3D.value && perspective.value ? { x: s.width / 2, y: s.height / 2, distance: Math.max(s.width, s.height) * 1.5 } : undefined)
   const result = drawItems(ctx, evaluated.items, e.library, e.selectedId.value, wireframe.value); hits = result.hits
   ctx.restore()
   if (view3D.value && !perspective.value) drawSpatialGuides(ctx, observationMatrix(s.width, s.height, yaw.value, pitch.value), s.width, s.height, scale)
@@ -38,7 +55,7 @@ function draw() {
   if (warnings.length !== previousWarnings.length || warnings.some((w, i) => w !== previousWarnings[i])) { previousWarnings = warnings; emit('warnings', warnings) }
 }
 function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw() }) }
-watch(() => [e.version.value, e.resourceVersion.value, e.doc.value, e.sceneIndex.value, e.compositionId.value, e.selectedId.value, e.frame.value, e.hidden.value, zoom.value, pan.value, wireframe.value, isolate.value, view3D.value, perspective.value, yaw.value, pitch.value], schedule)
+watch(() => [e.version.value, e.resourceVersion.value, e.doc.value, e.sceneIndex.value, e.compositionId.value, e.selectedId.value, e.frame.value, e.hidden.value, secondaryChoice.value, zoom.value, pan.value, wireframe.value, isolate.value, view3D.value, perspective.value, yaw.value, pitch.value], schedule)
 onMounted(() => { resize = new ResizeObserver(schedule); resize.observe(host.value!); schedule() })
 onBeforeUnmount(() => { resize?.disconnect(); cancelAnimationFrame(raf) })
 let down: { x: number; y: number; pan: boolean; rotated?: boolean } | null = null
@@ -52,7 +69,7 @@ function pointerUp(event: PointerEvent) {
   const hit = hitTest(hits, (down.x - bounds.left - origin.x) / scale, (down.y - bounds.top - origin.y) / scale)
   if (hit) {
     e.selectedId.value = hit.layer.offset
-    if (!view3D.value && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5 && e.composition.value?.layers.some(l => l.offset === hit.layer.offset)) {
+    if (!secondaryEnabled.value && !view3D.value && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5 && e.composition.value?.layers.some(l => l.offset === hit.layer.offset)) {
       let parent = hit.layer.parent, world = identity4(), seen = new Set<number>()
       const chain = []
       while (parent && !seen.has(parent)) { seen.add(parent); const l = e.composition.value.layers.find(l => l.offset === parent); if (!l) break; chain.unshift(l); parent = l.parent }
@@ -111,6 +128,10 @@ function reset() { yaw.value = 25; pitch.value = -20; zoom.value = 1; pan.value 
   <section class="stage-panel">
     <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button><template v-if="view3D"><n-button data-testid="view-front" size="tiny" @click="preset(0, 0)">正面</n-button><n-button data-testid="view-right" size="tiny" @click="preset(90, 0)">右侧</n-button><n-button data-testid="view-top" size="tiny" @click="preset(0, -90)">顶面</n-button></template><n-checkbox v-if="view3D" data-testid="perspective" v-model:checked="perspective" size="small">透视（近似）</n-checkbox><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button data-testid="focus-selected" size="tiny" :disabled="e.selectedId.value === null" @click="focusSelected">聚焦选中</n-button><n-button data-testid="export-preview" size="tiny" :disabled="!e.scene.value || e.busy.value" title="保存当前视口，包含选框、辅助线和当前预览限制；不是游戏原生分辨率渲染" @click="e.runOperation('导出预览 PNG', () => exportPreview(false))">导出预览 PNG</n-button><n-button data-testid="export-scene" size="tiny" :disabled="!e.scene.value || e.busy.value" title="原始尺寸、当前合成和帧；忽略临时隐藏/隔离，无选框和辅助线，仍使用当前预览渲染器" @click="e.runOperation('导出场景 PNG', () => exportPreview(true))">场景 PNG</n-button><n-button data-testid="export-branch" size="tiny" :disabled="!e.scene.value || e.selectedId.value === null || e.busy.value" title="原始场景尺寸，仅导出选中分支及配对遮罩；保留父级变换，忽略临时隐藏" @click="e.runOperation('导出分支 PNG', () => exportPreview(true, true))">分支 PNG</n-button><n-checkbox data-testid="transparent-export" v-model:checked="transparentExport" :disabled="e.busy.value" size="small" title="仅影响原始尺寸场景 PNG，不改变 AET 场景颜色">透明底</n-checkbox><n-button size="tiny" @click="reset">适应画布</n-button></div>
     <MenuCharacterPreview :editor="e" />
+    <div v-if="secondaryLayers.length" class="branch-hint">
+      <label>子菜单（部分模拟） <select data-testid="secondary-preview" v-model="secondaryChoice" :disabled="e.busy.value || view3D || isolate"><option value="">原始分支 / 单时钟</option><option value="arcade">Arcade on + Mix off</option><option value="mix">Mix on + Arcade off</option></select></label>
+      <span>仅 2D 非隔离，暂停画布拖动编辑；on 帧限制 10–90，off 固定 6；叠于其他 UI 之上，游戏顺序未核对。文字/版本/切换动画不模拟；原生场景 PNG 仍为原始合成。</span>
+    </div>
     <div v-if="multipleBranches" class="branch-hint" data-testid="branch-hint">当前叠加多个子合成，可能包含游戏按状态单独调用的分支；此预览不模拟菜单状态。选择图层后开启 Isolate 可单独检查。<n-button size="tiny" :disabled="e.selectedId.value === null" @click="isolate = true">隔离选中分支</n-button></div>
     <div ref="host" class="stage-host"><canvas ref="canvas" data-testid="aet-stage" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="down = null" @wheel.prevent="wheelZoom" /></div>
     <footer>{{ view3D ? '3D 自由观察 · 左键拖动旋转 · 仅改变观察相机，不修改资源 · 尚无完整 AET 相机透视' : '2D · 拖动图层编辑位置' }} · 滚轮缩放 · 中键 / Alt 拖动平移 · 单击选择</footer>

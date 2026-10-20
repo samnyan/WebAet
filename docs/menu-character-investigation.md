@@ -200,6 +200,12 @@ At HEAD `6f87342`, actual file input imported original `spr_nswgam_menu.farc`; P
 
 Actual shared browser searched CHARA_MAINMENU_01 in the original menu FARC; all eight resulting mounted thumbnail canvases matched every RGBA byte of separately decoded TXP atlas rectangle draws at the same 112px aspect-fit size. Reference explicitly converts bottom-up TXP rows to the top-left Sprite coordinate convention before cropping. An initial unflipped reference mismatched as expected; correcting that reference produced eight exact matches, without changing implementation. This compares browser crop/placement/orientation against the existing decoder and coordinate convention, not an independent decoder or game capture. Temporary canvases/pages were released with browser close; no files added.
 
+## Stage independent secondary preview
+
+Stage now offers an opt-in secondary-menu partial preview when all four exact branches exist: unrelated ROOT content first, inactive off at frame 6, active on at timeline frame clamped to 10–90. Default remains raw. Explicit UI states this provisional overlay order is not game-verified, excludes text/version/transitions, and native scene PNG stays raw. 3D/isolation bypass simulation; composition/document navigation resets the choice. Canvas drag editing is disabled in this mode because object-local time differs from the editing playhead; selection and Inspector remain available.
+
+Mounted original AET/FARC/database at scene 0 / ROOT 93, viewport 1600×1000: actual select switched arcade/mix at frames 30/60. All four actual Stage canvases matched every RGBA byte of an independently assembled base + off + on production-renderer reference. Base retained 84/64 items, active had 5; each inactive complete item signature stayed constant across frames. Scene JSON unchanged, dirty=false, no undo history. 3D disabled control and leaving ROOT removed it. Initial reference used a nonreactive setup-state origin snapshot and mismatched; recomputing viewport geometry fixed the harness. This is partial-preview wiring evidence, not game parity or recovered complete object order.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
