@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, provide, ref } from 'vue'
+import { materialPackagesKey } from '../editor/materialPackages'
+import type { MaterialPackage } from '../editor/materialPicker'
 import { NButton, NSelect, NSpin, NTag } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { createEditor } from '../editor/state'
@@ -20,6 +22,14 @@ const allWarnings = computed(() => [...warnings.value, ...resourceWarnings.value
 const scenes = computed(() => e.doc.value?.scenes.map((s, i) => ({ value: i, label: s.name })) ?? [])
 const root = ref<ResourceDirectory>(), indexedPaths = ref<string[]>([]), progress = ref<DirectoryProgress | null>(null)
 const assets = computed(() => root.value ? indexedPaths.value.filter(p => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p)).map(p => ({ value: p, label: p })) : e.documents.value.map(d => ({ value: d.name, label: d.name })))
+const importedPackages = ref<File[]>([])
+provide(materialPackagesKey, computed<MaterialPackage[]>(() => {
+  e.resourceVersion.value
+  const disk = root.value ? indexedPaths.value.filter(path => /\.(farc)$/i.test(path) || /(?:^|\/)spr_(?!db).*\.bin$/i.test(path)).map(path => ({ key: `disk:${path}`, label: path, load: async () => root.value!.file(path) })) : []
+  const files = importedPackages.value.map(file => ({ key: `import:${file.name}`, label: file.name, load: async () => file }))
+  const loaded = e.library.sets.map(set => ({ key: `loaded:${set.name}`, label: `${set.name} · 已加载`, load: async () => set }))
+  return [...disk, ...files, ...loaded]
+}))
 const activeAssetPath = ref('')
 const libraryAssets = computed<WorkspaceAsset[]>(() => assets.value.map(asset => ({ path: asset.value, name: asset.value.split('/').at(-1)!, loaded: asset.value === activeAssetPath.value || (!root.value && asset.value === e.doc.value?.name) })))
 function openComposition(sceneIndex: number, compositionId: number) {
@@ -31,6 +41,7 @@ async function importUserFiles(files: File[]) {
   const signal = loadController.signal
   try {
     await e.importFiles(files, signal, (current, done, total) => { progress.value = { phase: '导入文件', current, done, total } })
+    importedPackages.value = [...importedPackages.value.filter(old => !files.some(file => file.name === old.name)), ...files.filter(file => /\.farc$/i.test(file.name) || /^spr_(?!db).*\.bin$/i.test(file.name))]
   } catch (err) { if (signal.aborted) e.notices.value.push('文件导入已取消；已加载的资源保留。'); else e.error.value = String(err) }
   finally { loadController = undefined; progress.value = null }
 }

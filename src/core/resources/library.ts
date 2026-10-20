@@ -50,6 +50,7 @@ export class SpriteLibrary {
       if (sprite && texture) { this.ids.set(entry.id, { sprite, texture }); for (const alias of spriteAliases(entry.name)) this.entries.set(alias, { sprite, texture }) }
     }
   }
+  sourceFor(setName: string, index: number) { return this.database.find(entry => entry.set.toLowerCase() === setName.split('/').at(-1)!.toLowerCase() && entry.index === index) }
   find(name: string, id?: number) { return (id === undefined ? undefined : this.ids.get(id)) ?? this.entries.get(name.toUpperCase()) }
   image(texture: Texture) {
     let canvas = this.canvases.get(texture)
