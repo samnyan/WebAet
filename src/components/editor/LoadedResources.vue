@@ -85,6 +85,14 @@ function openComp(row: ResourceNode) {
   emit('openComposition', row.preview.sceneIndex, row.preview.compositionId)
   p.editor.workspace.leftTab.value = 'layers'
 }
+function openSceneResources(sceneIndex: number) {
+  dialogScene.value = sceneIndex
+  sceneDialog.value = true
+}
+function closePreview() {
+  selected.value = null
+  enlarged.value = false
+}
 function showPreview(row: ResourceNode) {
   if (row.preview) {
     selected.value = row
@@ -151,10 +159,7 @@ watch(
           ><button
             v-if="item.depth === 0 && item.sceneIndex !== undefined"
             title="大窗口查看场景资源"
-            @click.stop="
-              dialogScene = item.sceneIndex
-              sceneDialog = true
-            "
+            @click.stop="openSceneResources(item.sceneIndex)"
           >
             ↗</button
           ><small v-if="item.resolved !== undefined" :class="{ missing: !item.resolved }">{{
@@ -216,16 +221,7 @@ watch(
     <template v-if="target"
       ><div class="preview-heading">
         <span>预览</span
-        ><button
-          title="关闭预览"
-          aria-label="关闭底部预览"
-          @click="
-            selected = null
-            enlarged = false
-          "
-        >
-          ×
-        </button>
+        ><button title="关闭预览" aria-label="关闭底部预览" @click="closePreview">×</button>
       </div>
       <button class="preview-button" title="点击放大预览" @click="enlarged = true">
         <AssetPreview :editor="editor" :target="target" /></button

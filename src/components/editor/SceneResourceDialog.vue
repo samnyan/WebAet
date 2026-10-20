@@ -57,6 +57,10 @@ function preview(value: string) {
     ? { kind: 'composition' as const, sceneIndex: p.sceneIndex, compositionId: id! }
     : { kind: 'source' as const, sceneIndex: p.sceneIndex, videoId: id!, sourceIndex: 0 }
 }
+function activateRecord(value: string) {
+  selected.value = value
+  if (p.target) apply()
+}
 function apply() {
   try {
     const e = p.editor
@@ -115,10 +119,7 @@ function apply() {
             :class="{ selected: selected === item.value }"
             :disabled="item.disabled"
             @click="selected = item.value"
-            @dblclick="
-              selected = item.value
-              target && apply()
-            "
+            @dblclick="activateRecord(item.value)"
           >
             <AssetPreview :editor="editor" :target="preview(item.value)" :size="96" /><span>{{
               item.label
