@@ -488,6 +488,23 @@ function handleExpandAll() {
               </svg>
             </button>
 
+            <button
+              type="button"
+              class="flag-btn solo-btn"
+              :class="{ active: e.solo.value.has(item.row.layer.layerId) }"
+              :aria-pressed="e.solo.value.has(item.row.layer.layerId)"
+              :aria-label="`独显 ${item.row.layerName}`"
+              :title="
+                e.solo.value.has(item.row.layer.layerId)
+                  ? '取消独显（仅预览）'
+                  : '独显图层（仅预览）'
+              "
+              @click.stop="e.toggleSolo(item.row.layer.layerId)"
+              @dblclick.stop
+            >
+              S
+            </button>
+
             <!-- Layer Name -->
             <span
               class="layer-name"
@@ -562,6 +579,10 @@ function handleExpandAll() {
 </template>
 
 <style scoped>
+.solo-btn.active {
+  color: #ffd480;
+  background: #ffd48022;
+}
 .new-layer-row {
   position: absolute;
   left: 6px;
