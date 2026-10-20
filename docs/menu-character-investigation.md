@@ -176,6 +176,10 @@ At HEAD `471d1e8`, original menu companions, scene 0 / composition 60 / layer 70
 
 Original menu companions, composition 60, expanded Transform, viewport 1600×1000. Actual mouse wheel produced horizontal offset 400 and vertical offset 60. Actual Ctrl+wheel at a nonzero scroll offset changed 3→4.946163812100385 pixels/frame; pointer-anchor frame was 233.33333333333334 before and 233.31212710279297 after (within one screen pixel, native scroll rounding). Across 12 separately rendered frame changes, mounted timeline rows retained identity, the key-canvas raster stayed byte-identical, and instrumented clearRect calls on that canvas stayed zero. Instrumentation was restored. This verifies scroll/anchor and static-track invalidation behavior, not every row hit-test/DPR/resize case or delivered playback FPS. No implementation changes were needed; concurrent material-picker work was untouched.
 
+## Timeline pointer edit binary roundtrip
+
+Original menu companions, composition 60 / layer 70752 / positionX: actual mouse drag moved key 11 to 30, followed by the actual Export AET button and fresh-page import of the downloaded 115388 bytes plus original companions. All 23 keys matched the expected ordered curve, including unchanged values/tangents; moved key was frame=30/value=715/tangent=0. At frame 30, all four evaluated draw items resolved their Sprite references; dirty=false/error empty. No temporary files or implementation edits were required. This verifies the timeline-produced binary roundtrip, not independent-library readback, game execution or the directory-picker route. Concurrent resource-browser work was untouched.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
