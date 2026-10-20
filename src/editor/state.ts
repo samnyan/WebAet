@@ -381,11 +381,11 @@ export function createEditor() {
       error.value = String(err)
     }
   }
-  function scaleLayer(id: number, factor: number) {
+  function scaleLayer(id: number, factor: number, axis: 'both' | 'x' | 'y' = 'both') {
     const layer = composition.value?.layers.find((layer) => layer.offset === id)
     if (!layer?.video || busy.value) return
     try {
-      const proposal = scaledChannels(layer, frame.value, factor)
+      const proposal = scaledChannels(layer, frame.value, factor, axis)
       if (proposal) edit(() => Object.assign(layer.video!.curves, proposal))
     } catch (err) {
       error.value = err instanceof Error ? err.message : String(err)
