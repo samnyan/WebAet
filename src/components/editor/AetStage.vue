@@ -72,6 +72,7 @@ let axisDrag: {
   id: number
   axis: 'x' | 'y' | 'rotate'
   angle: number
+  appliedAngle?: number
   lastAngle: number
   initialRotation: number
   pivot: { x: number; y: number }
@@ -226,8 +227,14 @@ function draw() {
     ctx.strokeStyle = '#d8b4fe'
     ctx.lineWidth = 1.5 / scale
     ctx.beginPath()
-    ctx.arc(gizmoPoint.x, gizmoPoint.y, 68 / scale, 0, Math.PI * 2)
+    ctx.arc(x, y, 68 / scale, 0, Math.PI * 2)
     ctx.stroke()
+    if (axisDrag?.axis === 'rotate') {
+      const delta = axisDrag.appliedAngle ?? 0
+      ctx.fillStyle = '#d8b4fe'
+      ctx.font = `${12 / scale}px monospace`
+      ctx.fillText(`Δ ${delta.toFixed(1)}°`, x + 74 / scale, y)
+    }
     ctx.lineWidth = 2 / scale
     for (const [dx, dy, color] of [
       [52, 0, '#f07d79'],
@@ -350,6 +357,7 @@ function pointerMove(event: PointerEvent) {
       const value = event.shiftKey
         ? Math.round((d.initialRotation + d.angle) / 15) * 15
         : d.initialRotation + d.angle
+      d.appliedAngle = value - d.initialRotation
       const preview = rotationPreview(
         d.parent,
         d.inverse,
