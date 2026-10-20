@@ -9,6 +9,8 @@ import {
   TIMELINE_DEFAULT_LABELS_WIDTH,
 } from '../../editor/timelineRows'
 import CurvePreview from './CurvePreview.vue'
+import WorkAreaControls from './WorkAreaControls.vue'
+import { useWorkArea } from '../../editor/workArea'
 import AetTimelineCanvas from './AetTimelineCanvas.vue'
 import TimelineLabels from './TimelineLabels.vue'
 import AnimationToolsDialog from './AnimationToolsDialog.vue'
@@ -40,6 +42,11 @@ watch([playbackSpeed, reverse], () => {
 })
 
 const segmentId = ref('all')
+const work = useWorkArea(e)
+function setWorkArea(start: number, end: number) {
+  if (work.set(start, end)) segmentId.value = 'work'
+}
+function clearWorkArea() { work.clear(); if (segmentId.value === 'work') segmentId.value = 'all' }
 
 const segments = computed(() => {
   e.version.value
@@ -57,6 +64,7 @@ const layerRange = computed(() => {
 
 const segmentOptions = computed(() => [
   { value: 'all', label: '完整时间范围' },
+  ...(work.area.value ? [{ value: 'work', label: '工作区间（仅预览）' }] : []),
   ...(layerRange.value
     ? [{ value: 'layer', label: `选中图层 · ${layerRange.value.start}–${layerRange.value.end} f（末端不含）` }]
     : []),
@@ -74,7 +82,7 @@ const fullRange = computed(() => {
 
 const range = computed(
   () =>
-    (segmentId.value === 'layer' ? layerRange.value : segments.value.find(s => s.id === segmentId.value)) ??
+    (segmentId.value === 'work' ? work.area.value : segmentId.value === 'layer' ? layerRange.value : segments.value.find(s => s.id === segmentId.value)) ??
     fullRange.value
 )
 
@@ -364,6 +372,7 @@ onBeforeUnmount(() => {
           :options="segmentOptions"
           :disabled="segmentOptions.length < 2"
         />
+        <WorkAreaControls :area="work.area.value" :frame="e.frame.value" :start="fullRange.start" :end="fullRange.end" :disabled="!e.composition.value || e.busy.value" @set="setWorkArea" @clear="clearWorkArea" />
         <n-checkbox data-testid="reverse-playback" v-model:checked="reverse" size="small">倒放</n-checkbox>
         <n-checkbox data-testid="show-curve" v-model:checked="showCurve" size="small">曲线预览</n-checkbox>
 
@@ -418,7 +427,6 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <div style="padding: 6px 10px"><n-button data-testid="new-layer" size="tiny" :disabled="!e.composition.value || e.busy.value" @click="e.insertLayer()">＋ 新建独立图层</n-button></div>
       <CurvePreview
         v-if="showCurve"
         :curve="activeCurve"
