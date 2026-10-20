@@ -1,9 +1,43 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
+import type { Editor } from '../../editor/state'
+import type { KeyRef } from '../../editor/propertyActions'
 import type { Curve } from '../../core/aet/types'
 import { curveGraph } from '../../core/animation/curveGraph'
-const props = defineProps<{ curve?: Curve; start: number; end: number; frame: number; revision: number }>()
+const props = defineProps<{ editor: Editor; snap?: boolean; curve?: Curve; start: number; end: number; frame: number; revision: number }>()
 const emit = defineEmits<{ scrub: [frame: number]; selectKey: [index: number] }>()
+const drag = shallowRef<{ id: number; ref: KeyRef; index: number; x: number; y: number; low: number; high: number; frame: number; value: number; tangent: number; moved: boolean } | null>(null)
+let seeking = false
+function cancel() { drag.value = null; seeking = false }
+watch([() => props.editor.workspace.docSession.value, () => props.editor.sceneIndex.value, () => props.editor.compositionId.value, () => props.editor.workspace.activeProperty.value, () => props.revision, () => props.editor.busy.value, () => props.start, () => props.end], cancel, { flush: 'sync' })
+function beginKey(event: PointerEvent, index: number) {
+  if (event.button !== 0) return
+  emit('selectKey', index)
+  const e = props.editor, ref = e.workspace.activeKey.value, key = props.curve?.keys[index], g = graph.value
+  if (!ref || !key || !g || props.curve!.keys.length < 2 || e.busy.value || (e.selected.value?.flags ?? 32) & 32) return
+  e.workspace.requestPause()
+  const svg = (event.currentTarget as SVGElement).ownerSVGElement!
+  svg.focus(); svg.setPointerCapture(event.pointerId)
+  drag.value = { id: event.pointerId, ref: { ...ref, property: { ...ref.property } }, index, x: event.clientX, y: event.clientY, low: g.low, high: g.high, frame: key.frame, value: key.value, tangent: key.tangent, moved: false }
+}
+function moveKey(event: PointerEvent) {
+  const d = drag.value
+  if (!d || d.id !== event.pointerId) return
+  const r = (event.currentTarget as SVGSVGElement).getBoundingClientRect(), key = props.curve?.keys[d.index]
+  if (!key || !r.width || !r.height) return
+  const raw = key.frame + (event.clientX - d.x) / r.width * 600 / 576 * (props.end - props.start)
+  const frame = Math.fround(props.snap === false ? raw : Math.round(raw))
+  const scale = d.high === d.low ? 1 : (d.high - d.low) / 56
+  const value = Math.fround(key.value - (event.clientY - d.y) / r.height * 84 * scale)
+  drag.value = { ...d, frame, value, moved: Math.abs(event.clientX - d.x) > 3 || Math.abs(event.clientY - d.y) > 3 }
+}
+function release(event: PointerEvent) {
+  if (drag.value?.id !== event.pointerId) return
+  moveKey(event)
+  const d = drag.value!
+  cancel()
+  if (d.moved) props.editor.actions.updateKey(d.ref, d.frame, d.value, d.tangent)
+}
 function scrub(event: PointerEvent) {
   const svg = event.currentTarget as SVGSVGElement, bounds = svg.getBoundingClientRect()
   if (bounds.width <= 0) return
@@ -12,19 +46,22 @@ function scrub(event: PointerEvent) {
 }
 function beginScrub(event: PointerEvent) {
   if (event.button !== 0) return
+  seeking = true
   const svg = event.currentTarget as SVGSVGElement; svg.setPointerCapture(event.pointerId); scrub(event)
 }
 const graph = computed(() => {
   props.revision
-  return curveGraph(props.curve, props.start, props.end)
+  const d = drag.value
+  const curve = d && props.curve ? { ...props.curve, keys: props.curve.keys.map((k, i) => i === d.index ? { ...k, frame: d.frame, value: d.value } : k).sort((a, b) => a.frame - b.frame) } : props.curve
+  return curveGraph(curve, props.start, props.end, d ?? undefined)
 })
 const playhead = computed(() => 12 + (props.frame - props.start) / (props.end - props.start) * 576)
 </script>
 <template>
   <div v-if="graph" class="curve-preview" data-testid="curve-preview">
-    <svg viewBox="0 0 600 84" preserveAspectRatio="none" role="img" aria-label="当前轨道 Hermite 曲线预览" @pointerdown="beginScrub" @pointermove="($event.buttons & 1) && scrub($event)">
+    <svg viewBox="0 0 600 84" preserveAspectRatio="none" role="img" tabindex="0" aria-label="当前轨道 Hermite 曲线预览" @keydown.esc.stop.prevent="cancel" @pointercancel="cancel" @lostpointercapture="cancel" @pointerup="release($event); seeking = false" @pointerdown="beginScrub" @pointermove="drag ? moveKey($event) : seeking && ($event.buttons & 1) && scrub($event)">
       <path :d="graph.path" fill="none" stroke="#79c6ff" stroke-width="1.5" vector-effect="non-scaling-stroke" />
-      <circle v-for="(key, i) in graph.keys" :key="i" :cx="key.x" :cy="key.y" r="4" fill="#e6c36b" class="curve-key" @pointerdown.stop="emit('selectKey', key.index)"><title>{{ key.title }}</title></circle>
+      <circle v-for="(key, i) in graph.keys" :key="i" :cx="key.x" :cy="key.y" r="4" fill="#e6c36b" class="curve-key" @pointerdown.stop="beginKey($event, key.index)"><title>{{ key.title }}</title></circle>
       <line v-if="frame >= start && frame <= end" :x1="playhead" :x2="playhead" y1="0" y2="84" stroke="#ef7885" vector-effect="non-scaling-stroke" />
     </svg>
     <small>{{ graph.low.toPrecision(5) }} … {{ graph.high.toPrecision(5) }} · Bézier 控制包络</small>

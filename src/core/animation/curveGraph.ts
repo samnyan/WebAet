@@ -2,7 +2,7 @@ import type { Curve } from '../aet/types'
 import { sampleCurve, sampleCurveTangent } from './curves'
 
 /** Exact Hermite-to-Bezier conversion, clipped in time before display mapping. */
-export function curveGraph(curve: Curve | undefined, start: number, end: number) {
+export function curveGraph(curve: Curve | undefined, start: number, end: number, bounds?: { low: number; high: number }) {
   if (!curve?.keys.length || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null
   const times = [start, ...curve.keys.filter(k => k.frame > start && k.frame < end).map(k => k.frame), end]
   const segments = times.slice(1).map((b, i) => {
@@ -13,6 +13,7 @@ export function curveGraph(curve: Curve | undefined, start: number, end: number)
   // The Bezier control hull bounds the complete curve, including narrow overshoots.
   let low = Infinity, high = -Infinity
   for (const segment of segments) for (const p of segment) { low = Math.min(low, p.value); high = Math.max(high, p.value) }
+  if (bounds) { low = bounds.low; high = bounds.high }
   const x = (f: number) => 12 + (f - start) / (end - start) * 576
   const y = (v: number) => high === low ? 42 : 70 - (v - low) / (high - low) * 56
   const xy = (p: { frame: number; value: number }) => `${x(p.frame)},${y(p.value)}`

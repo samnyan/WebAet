@@ -431,6 +431,8 @@ onBeforeUnmount(() => {
       <GraphKeyControls v-if="showCurve" :editor="e" />
       <CurvePreview
         v-if="showCurve"
+        :editor="e"
+        :snap="snap"
         :curve="activeCurve"
         :start="range.start"
         :end="range.end"
