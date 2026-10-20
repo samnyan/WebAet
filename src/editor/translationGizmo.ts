@@ -36,6 +36,7 @@ export function translationGizmo(composition: Composition, layerId: number, fram
   return {
     x,
     y,
+    parent: [a, b, c, d] as const,
     inverse: [d / determinant, -b / determinant, -c / determinant, a / determinant] as const,
   }
 }
