@@ -72,7 +72,7 @@ let resize: ResizeObserver,
   raf = 0
 let axisDrag: {
   id: number
-  axis: 'x' | 'y' | 'rotate' | 'scale' | 'scaleX' | 'scaleY'
+  axis: 'x' | 'y' | 'rotate' | 'scale' | 'scaleX' | 'scaleY' | 'anchor'
   factor?: number
   angle: number
   appliedAngle?: number
@@ -190,7 +190,7 @@ function draw() {
           : undefined,
       )
   const previewItems =
-    axisDrag && e.composition.value
+    axisDrag && axisDrag.axis !== 'anchor' && e.composition.value
       ? previewTranslation(
           evaluated.items,
           e.composition.value,
@@ -227,6 +227,9 @@ function draw() {
   if (gizmoPoint) {
     const x = gizmoPoint.x + (axisDrag?.linear ? 0 : (axisDrag?.dx ?? 0)),
       y = gizmoPoint.y + (axisDrag?.linear ? 0 : (axisDrag?.dy ?? 0))
+    ctx.strokeStyle = '#ffd480'
+    ctx.lineWidth = 2 / scale
+    ctx.strokeRect(x - 5 / scale, y - 5 / scale, 10 / scale, 10 / scale)
     ctx.fillStyle = '#79c6ff'
     ctx.fillRect(x + 46 / scale, y + 46 / scale, 9 / scale, 9 / scale)
     ctx.fillStyle = '#f07d79'
@@ -312,19 +315,21 @@ function pointerDown(event: PointerEvent) {
     const x = event.clientX - bounds.left - origin.x - gizmoPoint.x * scale
     const y = event.clientY - bounds.top - origin.y - gizmoPoint.y * scale
     const axis =
-      Math.abs(x - 84) <= 9 && Math.abs(y) <= 9
-        ? 'scaleX'
-        : Math.abs(x) <= 9 && Math.abs(y + 84) <= 9
-          ? 'scaleY'
-          : Math.abs(y) <= 7 && x >= 12 && x <= 60
-            ? 'x'
-            : Math.abs(x) <= 7 && y <= -12 && y >= -60
-              ? 'y'
-              : Math.abs(x - 50) <= 9 && Math.abs(y - 50) <= 9
-                ? 'scale'
-                : Math.abs(Math.hypot(x, y) - 68) <= 7
-                  ? 'rotate'
-                  : null
+      Math.abs(x) <= 8 && Math.abs(y) <= 8
+        ? 'anchor'
+        : Math.abs(x - 84) <= 9 && Math.abs(y) <= 9
+          ? 'scaleX'
+          : Math.abs(x) <= 9 && Math.abs(y + 84) <= 9
+            ? 'scaleY'
+            : Math.abs(y) <= 7 && x >= 12 && x <= 60
+              ? 'x'
+              : Math.abs(x) <= 7 && y <= -12 && y >= -60
+                ? 'y'
+                : Math.abs(x - 50) <= 9 && Math.abs(y - 50) <= 9
+                  ? 'scale'
+                  : Math.abs(Math.hypot(x, y) - 68) <= 7
+                    ? 'rotate'
+                    : null
     if (axis) {
       e.workspace.requestPause()
       canvas.value!.focus()
@@ -359,6 +364,12 @@ function pointerDown(event: PointerEvent) {
 }
 function pointerMove(event: PointerEvent) {
   if (axisDrag?.id === event.pointerId) {
+    if (axisDrag.axis === 'anchor') {
+      axisDrag.dx = (event.clientX - axisDrag.x) / scale
+      axisDrag.dy = (event.clientY - axisDrag.y) / scale
+      schedule()
+      return
+    }
     if (axisDrag.axis === 'scale' || axisDrag.axis === 'scaleX' || axisDrag.axis === 'scaleY') {
       const d = axisDrag
       const factor = Math.max(
@@ -450,6 +461,9 @@ function pointerUp(event: PointerEvent) {
           drag.factor ?? 1,
           drag.axis === 'scale' ? 'both' : drag.axis === 'scaleX' ? 'x' : 'y',
         )
+      } else if (drag.axis === 'anchor') {
+        const local = localTranslation(drag.inverse, drag.dx, drag.dy)
+        e.moveAnchor(drag.layer, local.x, local.y)
       } else if (drag.axis === 'rotate') {
         const raw = drag.initialRotation + drag.angle
         e.actions.setValue(

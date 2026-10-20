@@ -12,6 +12,7 @@ import {
 import { stretchedLayer, slippedLayer, movedLayers } from './layerTiming'
 import { translatedPosition } from './translationEditing'
 import { scaledChannels } from './scaleEditing'
+import { anchoredChannels } from './anchorEditing'
 import { parseAet } from '../core/aet/reader'
 import { writeAet } from '../core/aet/writer'
 import { videoCurve, type AetDocument, type EditableChannel, type Scene } from '../core/aet/types'
@@ -381,6 +382,16 @@ export function createEditor() {
       error.value = String(err)
     }
   }
+  function moveAnchor(id: number, dx: number, dy: number) {
+    const layer = composition.value?.layers.find((layer) => layer.offset === id)
+    if (!layer?.video || busy.value) return
+    try {
+      const proposal = anchoredChannels(layer, frame.value, dx, dy)
+      if (proposal) edit(() => Object.assign(layer.video!.curves, proposal))
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : String(err)
+    }
+  }
   function scaleLayer(id: number, factor: number, axis: 'both' | 'x' | 'y' = 'both') {
     const layer = composition.value?.layers.find((layer) => layer.offset === id)
     if (!layer?.video || busy.value) return
@@ -646,6 +657,7 @@ export function createEditor() {
     restoreChannel,
     translateLayer,
     scaleLayer,
+    moveAnchor,
     exportBinary,
     saveProject,
     canUndo: computed(() => {
