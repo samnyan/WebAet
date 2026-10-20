@@ -579,6 +579,12 @@ function handleLabelsWheel(e: WheelEvent) {
 }
 
 watch(
+  () => [p.editor.workspace.docSession.value, p.editor.sceneIndex.value, p.editor.compositionId.value],
+  () => cancel(),
+  { flush: 'sync' }
+)
+
+watch(
   () => p.frame,
   () => {
     if (p.follow && p.playing && !drag && scroll.value) {

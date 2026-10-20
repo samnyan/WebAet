@@ -180,6 +180,10 @@ Original menu companions, composition 60, expanded Transform, viewport 1600×100
 
 Original menu companions, composition 60 / layer 70752 / positionX: actual mouse drag moved key 11 to 30, followed by the actual Export AET button and fresh-page import of the downloaded 115388 bytes plus original companions. All 23 keys matched the expected ordered curve, including unchanged values/tangents; moved key was frame=30/value=715/tangent=0. At frame 30, all four evaluated draw items resolved their Sprite references; dirty=false/error empty. No temporary files or implementation edits were required. This verifies the timeline-produced binary roundtrip, not independent-library readback, game execution or the directory-picker route. Concurrent resource-browser work was untouched.
 
+## Fixed context-switch drag cancellation
+
+Reproduced an actual post-refactor defect: positionX key drag 11→30 in composition 60, switching to composition 61 before release, then mouse-up still changed the old scene data (dirty=true/history created). Added a synchronous watch on document session/scene/composition identity to cancel pending timeline interactions. The existing start/end watcher was insufficient when two compositions shared ranges. Retest with original menu companions confirmed the same cross-composition release left the entire scene unchanged, dirty=false/no undo entry; a normal same-composition drag still committed frame 30. Type checking passed. Concurrent material-browser files remained untouched.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
