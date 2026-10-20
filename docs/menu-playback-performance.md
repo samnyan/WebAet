@@ -36,6 +36,12 @@ Enabled the mounted timeline's actual workspace playback flag, allowed 30 RAF ca
 
 This establishes warm full-page playback advancement and observed RAF pacing at this viewport on this machine; it does not establish rendered-frame delivery or improvement over the native-canvas baseline. It does not verify full menu correctness, cold-start latency, timeline editing interactions, independent-object Stage integration, game parity, or a universal 60 FPS guarantee. Recheck only if subsequent relevant UX/rendering changes invalidate this observation; it is not final acceptance of another agent's uncommitted files.
 
+## Collapsed versus expanded mounted timeline
+
+At HEAD `058ac5c` plus concurrent material-browser work (not modified/staged here), original menu AET/FARC/database, scene 0 / composition 60 / selected layer 70752, viewport 1600×1000, Stage backing 1000×610, headless Chromium. Inspector remained visible. Each condition used 30 warmup RAF callbacks and 120 observed callbacks. Collapsed: 1 row / 0 timeline inputs, frame 33.660→153.648, RAF median 16.7ms / p95 17.3ms / max 26.4ms. Expanded Transform: 13 rows / 8 timeline inputs, frame 58.986→178.980, median 16.6ms / p95 17.2ms / max 27.3ms. Neither sample had an interval above 33.4ms or an editor error.
+
+Both samples retained row-model identity, issued zero clearRect calls to the key Canvas, and retained identical key-raster pixels while playback advanced. Instrumentation was restored and browser closed. Frame intervals differed after warmup (including first-use texture work in the first warmup); this is not a controlled identical-frame speedup comparison. It establishes no observed warm callback-pacing regression in this small real composition when its visible Transform inputs were expanded, not native ROOT performance, cold latency, long-task attribution or delivered rendering FPS. No additional performance optimization was justified by this sample.
+
 ## Interpretation and next boundary
 
 At this native canvas size the measured cost is drawing/texture preparation, not scene-index lookup or parent evaluation. No further evaluator caching is justified by this baseline. Cold decode preparation must be measured separately before proposing preload, async decode or cache-budget changes; the observed first draw does not prove which texture or decode stage dominates. Warm drawing also warrants profiling independently of the AE timeline work.
