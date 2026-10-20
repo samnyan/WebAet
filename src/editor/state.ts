@@ -40,6 +40,14 @@ export function createEditor() {
     notices = ref<string[]>([]),
     hidden = ref(new Set<number>()),
     dirty = ref(false)
+  const solo = ref(new Set<number>())
+  function toggleSolo(id: number) {
+    if (!composition.value?.layers.some((layer) => layer.offset === id)) return
+    const next = new Set(solo.value)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    solo.value = next
+  }
   const undoStack: Scene[][] = [],
     redoStack: Scene[][] = [],
     historyVersion = ref(0)
@@ -92,6 +100,21 @@ export function createEditor() {
     selectScene,
   })
 
+  watch(
+    [() => workspace.docSession.value, sceneIndex, compositionId],
+    () => {
+      solo.value = new Set()
+    },
+    { flush: 'sync' },
+  )
+  watch(
+    version,
+    () => {
+      const ids = new Set(composition.value?.layers.map((layer) => layer.offset))
+      solo.value = new Set([...solo.value].filter((id) => ids.has(id)))
+    },
+    { flush: 'sync' },
+  )
   let isSyncingSelection = false
   const origSelectLayer = workspace.selectLayer
   workspace.selectLayer = (ref) => {
@@ -614,6 +637,8 @@ export function createEditor() {
     actions.selectLayer(null)
   }
   return {
+    solo,
+    toggleSolo,
     stretchLayer,
     slipLayer,
     moveLayerGroup,

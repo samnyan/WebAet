@@ -8,6 +8,7 @@ import { previewTranslation } from '../../editor/translationPreview'
 import { pointerAngle, angleDelta, rotationPreview } from '../../editor/rotationGizmo'
 import { sampleCurve } from '../../core/animation/curves'
 import { axisScalePreview } from '../../editor/scaleGizmo'
+import { soloPreview } from '../../editor/soloPreview'
 import { scalePreview } from '../../editor/scaleEditing'
 import { createSceneEvaluator } from '../../core/render/evaluate'
 import { createInstanceEvaluator } from '../../core/render/instances'
@@ -105,6 +106,7 @@ watch(
     e.busy.value,
     view3D.value,
     secondaryEnabled.value,
+    e.solo.value,
   ],
   cancelAxis,
   { flush: 'sync' },
@@ -200,7 +202,13 @@ function draw() {
           axisDrag.linear,
         )
       : evaluated.items
-  const result = drawItems(ctx, previewItems, e.library, e.selectedId.value, wireframe.value)
+  const result = drawItems(
+    ctx,
+    soloPreview(previewItems, e.solo.value),
+    e.library,
+    e.selectedId.value,
+    wireframe.value,
+  )
   hits = result.hits
   ctx.restore()
   if (view3D.value && !perspective.value)
@@ -643,6 +651,20 @@ function reset() {
       <span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span
       ><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox
       ><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox>
+      <n-button
+        size="tiny"
+        :disabled="e.selectedId.value === null"
+        :type="
+          e.selectedId.value !== null && e.solo.value.has(e.selectedId.value)
+            ? 'warning'
+            : 'default'
+        "
+        @click="e.selectedId.value !== null && e.toggleSolo(e.selectedId.value)"
+        >独显选中</n-button
+      >
+      <n-button v-if="e.solo.value.size" size="tiny" @click="e.solo.value = new Set()"
+        >清除独显 ({{ e.solo.value.size }})</n-button
+      >
       <div class="spacer" />
       <n-button size="tiny" @click="reset">适应画布</n-button
       ><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button
