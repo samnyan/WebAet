@@ -7,7 +7,13 @@ import { insertSampledKey } from '../core/animation/insertKey'
 import { adjacentKey } from '../core/animation/keySearch'
 import { canParent } from '../core/animation/parenting'
 import { canReferenceComposition } from '../core/animation/compositionReference'
-import { getFullRange, resolveCurve, resolveLayerContext, type LayerRef, type PropertyRef } from './properties'
+import {
+  getFullRange,
+  resolveCurve,
+  resolveLayerContext,
+  type LayerRef,
+  type PropertyRef,
+} from './properties'
 import type { WorkspaceState } from './workspaceState'
 
 export interface KeyRef {
@@ -37,9 +43,12 @@ export interface PropertyActions {
   updateKey(keyRef: KeyRef, frame: number, value: number, tangent: number): void
   setKeyValue(keyRef: KeyRef, value: number): void
   setKeyTangent(keyRef: KeyRef, value: number): void
-  jumpKey(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }, direction: -1 | 1): void
+  jumpKey(
+    channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel },
+    direction: -1 | 1,
+  ): void
   copySelectedKeys(): void
-  pasteSelectedKeys(): void
+  pasteSelectedKeys(target?: LayerRef): void
   selectKeys(keys: KeyRef[]): void
   moveSelectedKeys(delta: number): void
   toggleKey(keyRef: KeyRef): void
@@ -49,13 +58,18 @@ export interface PropertyActions {
   selectLayer(layerRef: LayerRef | null): void
   enterComposition(layerRef: LayerRef): void
   openComposition(sceneIndex: number, id: number): void
-  hasKeyAtCurrentFrame(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }): boolean
-  canJumpKey(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }, direction: -1 | 1): boolean
+  hasKeyAtCurrentFrame(
+    channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel },
+  ): boolean
+  canJumpKey(
+    channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel },
+    direction: -1 | 1,
+  ): boolean
 }
 
 export function createPropertyActions(
   editor: PropertyActionsEditorContext,
-  workspace: WorkspaceState
+  workspace: WorkspaceState,
 ): PropertyActions {
   function setValue(ref: PropertyRef, value: any): void {
     workspace.requestPause()
@@ -66,7 +80,7 @@ export function createPropertyActions(
     if (ref.kind === 'layer' && ref.field === 'locked') {
       const lk = Boolean(value)
       editor.edit(() => {
-        ctx.layer.flags = lk ? (ctx.layer.flags | 32) : (ctx.layer.flags & ~32)
+        ctx.layer.flags = lk ? ctx.layer.flags | 32 : ctx.layer.flags & ~32
       })
       return
     }
@@ -90,9 +104,14 @@ export function createPropertyActions(
         } else if (ref.field === 'visible') {
           const v = Boolean(value)
           editor.edit(() => {
-            ctx.layer.flags = v ? (ctx.layer.flags | 1) : (ctx.layer.flags & ~1)
+            ctx.layer.flags = v ? ctx.layer.flags | 1 : ctx.layer.flags & ~1
           })
-        } else if (ref.field === 'start' || ref.field === 'end' || ref.field === 'timeOffset' || ref.field === 'timeScale') {
+        } else if (
+          ref.field === 'start' ||
+          ref.field === 'end' ||
+          ref.field === 'timeOffset' ||
+          ref.field === 'timeScale'
+        ) {
           const num = Math.fround(Number(value))
           if (!Number.isFinite(num)) {
             editor.error.value = '图层时间参数必须是有限 float32'
@@ -142,7 +161,7 @@ export function createPropertyActions(
         break
       }
       case 'marker': {
-        const m = ctx.layer.markers.find(x => x.offset === ref.markerOffset)
+        const m = ctx.layer.markers.find((x) => x.offset === ref.markerOffset)
         if (!m) return
         if (ref.field === 'name') {
           editor.edit(() => {
@@ -165,13 +184,13 @@ export function createPropertyActions(
     workspace.requestPause()
     if (editor.busy.value) return
     const ctx = resolveLayerContext(editor, channelRef)
-    if (!ctx || (ctx.layer.flags & 32)) return
+    if (!ctx || ctx.layer.flags & 32) return
     const curve = resolveCurve(editor, channelRef)
     if (!curve) return
 
     const targetFrame = Math.round(editor.frame.value)
     if (curve.keys.length > 1) {
-      const existing = curve.keys.find(k => Math.fround(k.frame) === Math.fround(targetFrame))
+      const existing = curve.keys.find((k) => Math.fround(k.frame) === Math.fround(targetFrame))
       if (existing) {
         selectKey({ property: channelRef, frame: existing.frame })
         return
@@ -191,12 +210,12 @@ export function createPropertyActions(
     workspace.requestPause()
     if (editor.busy.value) return
     const ctx = resolveLayerContext(editor, keyRef.property)
-    if (!ctx || (ctx.layer.flags & 32)) return
+    if (!ctx || ctx.layer.flags & 32) return
     const curve = resolveCurve(editor, keyRef.property)
     if (!curve) return
 
     const time = Math.fround(keyRef.frame)
-    const idx = curve.keys.findIndex(k => Math.fround(k.frame) === time)
+    const idx = curve.keys.findIndex((k) => Math.fround(k.frame) === time)
     if (idx < 0) return
 
     editor.edit(() => {
@@ -217,7 +236,7 @@ export function createPropertyActions(
     workspace.requestPause()
     if (editor.busy.value) return
     const ctx = resolveLayerContext(editor, keyRef.property)
-    if (!ctx || (ctx.layer.flags & 32)) return
+    if (!ctx || ctx.layer.flags & 32) return
     const curve = resolveCurve(editor, keyRef.property)
     if (!curve) return
 
@@ -229,16 +248,16 @@ export function createPropertyActions(
     }
     if (fromTime === toTime) return
 
-    if (curve.keys.some(k => Math.fround(k.frame) === toTime)) {
+    if (curve.keys.some((k) => Math.fround(k.frame) === toTime)) {
       editor.error.value = `目标帧 ${toTime} 已存在关键帧，禁止时间冲突`
       return
     }
 
-    const idx = curve.keys.findIndex(k => Math.fround(k.frame) === fromTime)
+    const idx = curve.keys.findIndex((k) => Math.fround(k.frame) === fromTime)
     if (idx < 0) return
 
     editor.edit(() => {
-      const keys = curve.keys.map(k => ({ ...k }))
+      const keys = curve.keys.map((k) => ({ ...k }))
       keys[idx]!.frame = toTime
       keys.sort((a, b) => a.frame - b.frame)
       curve.keys = keys
@@ -248,16 +267,37 @@ export function createPropertyActions(
 
   function updateKey(keyRef: KeyRef, frame: number, value: number, tangent: number): void {
     if (editor.busy.value) return
-    const ctx = resolveLayerContext(editor, keyRef.property), curve = resolveCurve(editor, keyRef.property)
-    if (!ctx || !curve || (ctx.layer.flags & 32)) return
-    const index = curve.keys.findIndex(k => Math.fround(k.frame) === Math.fround(keyRef.frame))
-    if (index < 0) { editor.error.value = '关键帧已失效'; return }
-    const next = { frame: Math.fround(frame), value: Math.fround(value), tangent: Math.fround(tangent) }
-    if (!Object.values(next).every(Number.isFinite)) { editor.error.value = '关键帧参数必须是有限 float32'; return }
-    if (curve.keys.length === 1 && next.frame !== curve.keys[index]!.frame) { editor.error.value = '常量轨道不能修改关键帧时间'; return }
-    if (curve.keys.some((k, i) => i !== index && Math.fround(k.frame) === next.frame)) { editor.error.value = '目标时间已有关键帧'; return }
+    const ctx = resolveLayerContext(editor, keyRef.property),
+      curve = resolveCurve(editor, keyRef.property)
+    if (!ctx || !curve || ctx.layer.flags & 32) return
+    const index = curve.keys.findIndex((k) => Math.fround(k.frame) === Math.fround(keyRef.frame))
+    if (index < 0) {
+      editor.error.value = '关键帧已失效'
+      return
+    }
+    const next = {
+      frame: Math.fround(frame),
+      value: Math.fround(value),
+      tangent: Math.fround(tangent),
+    }
+    if (!Object.values(next).every(Number.isFinite)) {
+      editor.error.value = '关键帧参数必须是有限 float32'
+      return
+    }
+    if (curve.keys.length === 1 && next.frame !== curve.keys[index]!.frame) {
+      editor.error.value = '常量轨道不能修改关键帧时间'
+      return
+    }
+    if (curve.keys.some((k, i) => i !== index && Math.fround(k.frame) === next.frame)) {
+      editor.error.value = '目标时间已有关键帧'
+      return
+    }
     workspace.requestPause()
-    editor.edit(() => { curve.keys = curve.keys.map((k, i) => i === index ? next : k).sort((a, b) => a.frame - b.frame) })
+    editor.edit(() => {
+      curve.keys = curve.keys
+        .map((k, i) => (i === index ? next : k))
+        .sort((a, b) => a.frame - b.frame)
+    })
     selectKeys([{ property: keyRef.property, frame: next.frame }])
   }
 
@@ -265,7 +305,7 @@ export function createPropertyActions(
     workspace.requestPause()
     if (editor.busy.value) return
     const ctx = resolveLayerContext(editor, keyRef.property)
-    if (!ctx || (ctx.layer.flags & 32)) return
+    if (!ctx || ctx.layer.flags & 32) return
     const curve = resolveCurve(editor, keyRef.property)
     if (!curve) return
 
@@ -275,7 +315,7 @@ export function createPropertyActions(
       return
     }
     const time = Math.fround(keyRef.frame)
-    const key = curve.keys.find(k => Math.fround(k.frame) === time)
+    const key = curve.keys.find((k) => Math.fround(k.frame) === time)
     if (!key) return
 
     editor.edit(() => {
@@ -287,7 +327,7 @@ export function createPropertyActions(
     workspace.requestPause()
     if (editor.busy.value) return
     const ctx = resolveLayerContext(editor, keyRef.property)
-    if (!ctx || (ctx.layer.flags & 32)) return
+    if (!ctx || ctx.layer.flags & 32) return
     const curve = resolveCurve(editor, keyRef.property)
     if (!curve) return
 
@@ -297,7 +337,7 @@ export function createPropertyActions(
       return
     }
     const time = Math.fround(keyRef.frame)
-    const key = curve.keys.find(k => Math.fround(k.frame) === time)
+    const key = curve.keys.find((k) => Math.fround(k.frame) === time)
     if (!key) return
 
     editor.edit(() => {
@@ -307,7 +347,7 @@ export function createPropertyActions(
 
   function jumpKey(
     channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel },
-    direction: -1 | 1
+    direction: -1 | 1,
   ): void {
     workspace.requestPause()
     const curve = resolveCurve(editor, channelRef)
@@ -316,7 +356,13 @@ export function createPropertyActions(
     if (!ctx) return
 
     const fullRange = getFullRange(editor, ctx.composition, ctx.scene)
-    const targetIdx = adjacentKey(curve.keys, editor.frame.value, fullRange.start, fullRange.end, direction)
+    const targetIdx = adjacentKey(
+      curve.keys,
+      editor.frame.value,
+      fullRange.start,
+      fullRange.end,
+      direction,
+    )
     if (targetIdx >= 0) {
       const targetKey = curve.keys[targetIdx]!
       workspace.seek(targetKey.frame)
@@ -326,50 +372,110 @@ export function createPropertyActions(
   }
 
   let clipboard: { ref: KeyRef; value: number; tangent: number }[] = []
-  watch(() => editor.doc.value?.source, () => { clipboard = [] }, { flush: 'sync' })
+  watch(
+    () => editor.doc.value?.source,
+    () => {
+      clipboard = []
+    },
+    { flush: 'sync' },
+  )
   function copySelectedKeys(): void {
     const copied: typeof clipboard = []
     for (const ref of workspace.selectedKeys.value) {
       const curve = resolveCurve(editor, ref.property)
-      const key = curve?.keys.find(k => Math.fround(k.frame) === Math.fround(ref.frame))
-      if (!key) { editor.error.value = '选中的关键帧已失效'; return }
-      if (curve!.keys.length < 2) { editor.error.value = '常量轨道没有可复制的时间关键帧'; return }
-      copied.push({ ref: { property: { ...ref.property }, frame: key.frame }, value: key.value, tangent: key.tangent })
+      const key = curve?.keys.find((k) => Math.fround(k.frame) === Math.fround(ref.frame))
+      if (!key) {
+        editor.error.value = '选中的关键帧已失效'
+        return
+      }
+      if (curve!.keys.length < 2) {
+        editor.error.value = '常量轨道没有可复制的时间关键帧'
+        return
+      }
+      copied.push({
+        ref: { property: { ...ref.property }, frame: key.frame },
+        value: key.value,
+        tangent: key.tangent,
+      })
     }
     if (copied.length) clipboard = copied
   }
-  function pasteSelectedKeys(): void {
+  function pasteSelectedKeys(target?: LayerRef): void {
     if (editor.busy.value || !clipboard.length) return
     try {
-      const delta = editor.frame.value - Math.min(...clipboard.map(k => k.ref.frame))
-      const groups = new Map<string, { ref: KeyRef; keys: { frame: number; value: number; tangent: number }[] }>()
-      for (const entry of clipboard) {
-        if (entry.ref.property.sceneIndex !== editor.sceneIndex.value || entry.ref.property.compositionId !== editor.compositionId.value) throw new Error('请返回复制关键帧的原合成粘贴')
+      if (
+        target &&
+        new Set(
+          clipboard.map(
+            (k) =>
+              `${k.ref.property.sceneIndex}:${k.ref.property.compositionId}:${k.ref.property.layerId}`,
+          ),
+        ).size !== 1
+      )
+        throw new Error('跨图层粘贴只接受来自同一图层的关键帧')
+      if (
+        target &&
+        (target.sceneIndex !== editor.sceneIndex.value ||
+          target.compositionId !== editor.compositionId.value)
+      )
+        throw new Error('粘贴目标不在当前合成')
+      const entries = clipboard.map((k) =>
+        target ? { ...k, ref: { ...k.ref, property: { ...k.ref.property, ...target } } } : k,
+      )
+      const delta = editor.frame.value - Math.min(...entries.map((k) => k.ref.frame))
+      const groups = new Map<
+        string,
+        { ref: KeyRef; keys: { frame: number; value: number; tangent: number }[] }
+      >()
+      for (const entry of entries) {
+        if (
+          entry.ref.property.sceneIndex !== editor.sceneIndex.value ||
+          entry.ref.property.compositionId !== editor.compositionId.value
+        )
+          throw new Error('请返回复制关键帧的原合成粘贴')
         const id = keyIdentity({ ...entry.ref, frame: 0 })
         const group = groups.get(id) ?? { ref: entry.ref, keys: [] }
-        group.keys.push({ frame: Math.fround(entry.ref.frame + delta), value: entry.value, tangent: entry.tangent })
+        group.keys.push({
+          frame: Math.fround(entry.ref.frame + delta),
+          value: entry.value,
+          tangent: entry.tangent,
+        })
         groups.set(id, group)
       }
-      const proposals = [...groups.values()].map(group => {
-        const ctx = resolveLayerContext(editor, group.ref.property), curve = resolveCurve(editor, group.ref.property)
-        if (!ctx || !curve || (ctx.layer.flags & 32)) throw new Error('粘贴目标已失效或包含锁定图层')
+      const proposals = [...groups.values()].map((group) => {
+        const ctx = resolveLayerContext(editor, group.ref.property),
+          curve = resolveCurve(editor, group.ref.property)
+        if (!ctx || !curve || ctx.layer.flags & 32) throw new Error('粘贴目标已失效或包含锁定图层')
         return { curve, keys: pastedKeys(curve.keys, group.keys) }
       })
       workspace.requestPause()
-      editor.edit(() => { for (const proposal of proposals) proposal.curve.keys = proposal.keys })
-      selectKeys(clipboard.map(k => ({ property: k.ref.property, frame: Math.fround(k.ref.frame + delta) })))
-    } catch (cause) { editor.error.value = String(cause) }
+      editor.edit(() => {
+        for (const proposal of proposals) proposal.curve.keys = proposal.keys
+      })
+      selectKeys(
+        entries.map((k) => ({ property: k.ref.property, frame: Math.fround(k.ref.frame + delta) })),
+      )
+    } catch (cause) {
+      editor.error.value = String(cause)
+    }
   }
 
-  const keyIdentity = (key: KeyRef) => `${key.property.sceneIndex}:${key.property.compositionId}:${key.property.layerId}:${key.property.channel}:${Math.fround(key.frame)}`
+  const keyIdentity = (key: KeyRef) =>
+    `${key.property.sceneIndex}:${key.property.compositionId}:${key.property.layerId}:${key.property.channel}:${Math.fround(key.frame)}`
   function selectKeys(keys: KeyRef[]): void {
     const unique = new Map<string, KeyRef>()
     for (const key of keys) {
-      if (key.property.sceneIndex !== editor.sceneIndex.value || key.property.compositionId !== editor.compositionId.value) continue
+      if (
+        key.property.sceneIndex !== editor.sceneIndex.value ||
+        key.property.compositionId !== editor.compositionId.value
+      )
+        continue
       const curve = resolveCurve(editor, key.property)
-      if (curve?.keys.some(k => Math.fround(k.frame) === Math.fround(key.frame))) unique.set(keyIdentity(key), key)
+      if (curve?.keys.some((k) => Math.fround(k.frame) === Math.fround(key.frame)))
+        unique.set(keyIdentity(key), key)
     }
-    const next = [...unique.values()], primary = next.at(-1)
+    const next = [...unique.values()],
+      primary = next.at(-1)
     workspace.selectLayer(primary?.property ?? null)
     workspace.selectedKeys.value = next
     workspace.activeKey.value = primary ?? null
@@ -379,11 +485,12 @@ export function createPropertyActions(
   function toggleKey(keyRef: KeyRef): void {
     const ctx = resolveLayerContext(editor, keyRef.property)
     const curve = resolveCurve(editor, keyRef.property)
-    if (!ctx || !curve?.keys.some(k => Math.fround(k.frame) === Math.fround(keyRef.frame))) return
+    if (!ctx || !curve?.keys.some((k) => Math.fround(k.frame) === Math.fround(keyRef.frame))) return
     const previous = [...workspace.selectedKeys.value]
     const identity = keyIdentity(keyRef)
-    const next = previous.some(k => keyIdentity(k) === identity)
-      ? previous.filter(k => keyIdentity(k) !== identity) : [...previous, keyRef]
+    const next = previous.some((k) => keyIdentity(k) === identity)
+      ? previous.filter((k) => keyIdentity(k) !== identity)
+      : [...previous, keyRef]
     const primary = next.at(-1)
     workspace.selectLayer(primary?.property ?? null)
     workspace.selectedKeys.value = next
@@ -399,33 +506,52 @@ export function createPropertyActions(
       for (const key of selected) {
         const id = keyIdentity({ ...key, frame: 0 })
         const group = groups.get(id) ?? { key, times: [] }
-        group.times.push(key.frame); groups.set(id, group)
+        group.times.push(key.frame)
+        groups.set(id, group)
       }
       const proposals = [...groups.values()].map(({ key, times }) => {
-        const ctx = resolveLayerContext(editor, key.property), curve = resolveCurve(editor, key.property)
-        if (!ctx || !curve || (ctx.layer.flags & 32)) throw new Error('选中的关键帧已失效或包含锁定图层')
+        const ctx = resolveLayerContext(editor, key.property),
+          curve = resolveCurve(editor, key.property)
+        if (!ctx || !curve || ctx.layer.flags & 32)
+          throw new Error('选中的关键帧已失效或包含锁定图层')
         return { curve, keys: shiftedKeys(curve.keys, times, delta) }
       })
       workspace.requestPause()
-      editor.edit(() => { for (const proposal of proposals) proposal.curve.keys = proposal.keys })
-      const next = selected.map(key => ({ ...key, frame: Math.fround(key.frame + delta) }))
+      editor.edit(() => {
+        for (const proposal of proposals) proposal.curve.keys = proposal.keys
+      })
+      const next = selected.map((key) => ({ ...key, frame: Math.fround(key.frame + delta) }))
       workspace.selectedKeys.value = next
       workspace.activeKey.value = next.at(-1) ?? null
       workspace.activeProperty.value = next.at(-1)?.property ?? null
-    } catch (cause) { editor.error.value = String(cause) }
+    } catch (cause) {
+      editor.error.value = String(cause)
+    }
   }
 
   function removeSelectedKeys(): void {
     if (editor.busy.value || !workspace.selectedKeys.value.length) return
     // Resolve the complete group before mutation; stale or locked members reject atomically.
-    const targets = workspace.selectedKeys.value.map(key => ({ key, ctx: resolveLayerContext(editor, key.property), curve: resolveCurve(editor, key.property) }))
-    if (targets.some(t => !t.ctx || (t.ctx.layer.flags & 32) || !t.curve?.keys.some(k => Math.fround(k.frame) === Math.fround(t.key.frame)))) {
+    const targets = workspace.selectedKeys.value.map((key) => ({
+      key,
+      ctx: resolveLayerContext(editor, key.property),
+      curve: resolveCurve(editor, key.property),
+    }))
+    if (
+      targets.some(
+        (t) =>
+          !t.ctx ||
+          t.ctx.layer.flags & 32 ||
+          !t.curve?.keys.some((k) => Math.fround(k.frame) === Math.fround(t.key.frame)),
+      )
+    ) {
       editor.error.value = '选中的关键帧已失效或包含锁定图层'
       return
     }
     workspace.requestPause()
     editor.edit(() => {
-      for (const { key, curve } of targets) curve!.keys = curve!.keys.filter(k => Math.fround(k.frame) !== Math.fround(key.frame))
+      for (const { key, curve } of targets)
+        curve!.keys = curve!.keys.filter((k) => Math.fround(k.frame) !== Math.fround(key.frame))
     })
     workspace.selectedKeys.value = []
     workspace.activeKey.value = null
@@ -439,7 +565,7 @@ export function createPropertyActions(
     }
     const curve = resolveCurve(editor, keyRef.property)
     if (!curve) return
-    const found = curve.keys.find(k => Math.fround(k.frame) === Math.fround(keyRef.frame))
+    const found = curve.keys.find((k) => Math.fround(k.frame) === Math.fround(keyRef.frame))
     if (!found) return
 
     workspace.activeProperty.value = keyRef.property
@@ -466,23 +592,27 @@ export function createPropertyActions(
     workspace.openComposition(sceneIndex, id)
   }
 
-  function hasKeyAtCurrentFrame(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }): boolean {
+  function hasKeyAtCurrentFrame(
+    channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel },
+  ): boolean {
     const curve = resolveCurve(editor, channelRef)
     if (!curve || curve.keys.length <= 1) return false
     const targetFrame = Math.round(editor.frame.value)
-    return curve.keys.some(k => Math.fround(k.frame) === Math.fround(targetFrame))
+    return curve.keys.some((k) => Math.fround(k.frame) === Math.fround(targetFrame))
   }
 
   function canJumpKey(
     channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel },
-    direction: -1 | 1
+    direction: -1 | 1,
   ): boolean {
     const curve = resolveCurve(editor, channelRef)
     if (!curve || curve.keys.length < 2) return false
     const ctx = resolveLayerContext(editor, channelRef)
     if (!ctx) return false
     const fullRange = getFullRange(editor, ctx.composition, ctx.scene)
-    return adjacentKey(curve.keys, editor.frame.value, fullRange.start, fullRange.end, direction) >= 0
+    return (
+      adjacentKey(curve.keys, editor.frame.value, fullRange.start, fullRange.end, direction) >= 0
+    )
   }
 
   return {

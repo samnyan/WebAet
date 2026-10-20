@@ -464,11 +464,27 @@ function keyClipboard(event: KeyboardEvent) {
   event.preventDefault()
   event.stopPropagation()
   if (event.key.toLowerCase() === 'c') p.editor.actions.copySelectedKeys()
-  else p.editor.actions.pasteSelectedKeys()
+  else pasteKeys(event.shiftKey)
+}
+function pasteKeys(toSelected = false) {
+  const e = p.editor
+  if (!toSelected) {
+    e.actions.pasteSelectedKeys()
+    return
+  }
+  if (e.selectedId.value === null) return
+  e.actions.pasteSelectedKeys({
+    sceneIndex: e.sceneIndex.value,
+    compositionId: e.compositionId.value,
+    layerId: e.selectedId.value,
+  })
 }
 function keyMenuSelect(key: string) {
   if (key === 'copy') {
     p.editor.actions.copySelectedKeys()
+    keyMenu.value = null
+  } else if (key === 'paste-selected') {
+    pasteKeys(true)
     keyMenu.value = null
   } else if (key === 'paste') {
     p.editor.actions.pasteSelectedKeys()
@@ -1071,6 +1087,11 @@ defineExpose({ fit, setZoom, handleLabelsWheel })
       :options="[
         { key: 'copy', label: '复制选中关键帧' },
         { key: 'paste', label: '粘贴到播放头（原轨道）', disabled },
+        {
+          key: 'paste-selected',
+          label: '粘贴到选中图层（Ctrl+Shift+V）',
+          disabled: disabled || editor.selectedId.value === null,
+        },
         {
           key: 'delete',
           label:
