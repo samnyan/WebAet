@@ -151,8 +151,8 @@ export function createEditor() {
     workspace.activeKey.value = null
     workspace.playing.value = false
   }
-  function closeDocument() {
-    if (busy.value || dirty.value && !window.confirm('当前修改尚未保存，关闭资源会丢弃修改。继续？')) return
+  function closeDocument(confirmed = false) {
+    if (busy.value || !confirmed && dirty.value && !window.confirm('当前修改尚未保存，关闭资源会丢弃修改。继续？')) return
     doc.value = null; documents.value = []; library.clear(); resourceVersion.value++
     undoStack.length = 0; redoStack.length = 0; historyVersion.value++
     sceneIndex.value = 0; compositionId.value = 0; selectedId.value = null; frame.value = 0; hidden.value = new Set()

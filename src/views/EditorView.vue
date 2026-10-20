@@ -3,7 +3,7 @@ import { computed, onMounted, onBeforeUnmount, provide, ref } from 'vue'
 import { usePanelSizes } from '../editor/panelSizes'
 import { materialPackagesKey } from '../editor/materialPackages'
 import type { MaterialPackage } from '../editor/materialPicker'
-import { NButton, NSelect, NSpin, NTag } from 'naive-ui'
+import { NButton, NSelect, NSpin, NModal } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { createEditor } from '../editor/state'
 import { ResourceDirectory, type DirectoryProgress } from '../editor/resourceDirectory'
@@ -19,6 +19,9 @@ import EditorStatusBar from '../components/editor/EditorStatusBar.vue'
 const e = createEditor(), { locale, t } = useI18n()
 const { host: workspaceHost, style: panelStyle, start: resizePanel, reset: resetPanels } = usePanelSizes()
 function resetLayout() { resetPanels(); window.dispatchEvent(new Event('webaet:reset-layout')) }
+const closeDialog = ref(false)
+function confirmClose() { if (e.busy.value) return; e.closeDocument(true); activeAssetPath.value = ''; importedPackages.value = []; closeDialog.value = false }
+const missingResources = computed(() => !!e.doc.value && !e.busy.value && resourceWarnings.value.length > 0)
 const input = ref<HTMLInputElement>(), warnings = ref<string[]>([])
 const resourceWarnings = computed(() => { e.version.value; e.resourceVersion.value; return unresolvedSpriteSources(e.doc.value, e.library) })
 const allWarnings = computed(() => [...warnings.value, ...resourceWarnings.value])
@@ -56,7 +59,7 @@ async function pickDirectory(rescan = false) {
   const picker = (window as unknown as { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker
   if (!picker) { e.error.value = '此浏览器不支持目录句柄；请用 Chromium 选择资源目录，单文件导入仍可用。'; return }
   try {
-    const selected = rescan && root.value ? root.value.root : await picker()
+    const selected = await picker()
     e.busy.value = true; progress.value = { phase: '读取索引', current: selected.name, done: 0, total: 0 }
     const index = new ResourceDirectory(selected)
     scanController = new AbortController()
@@ -106,16 +109,27 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
 </script>
 <template>
   <div class="editor-shell" @dragover.prevent @drop.prevent="importUserFiles([...($event.dataTransfer?.files ?? [])])">
-    <div class="app-toolbar"><strong>WebAet</strong><n-tag size="small" :bordered="false">Local</n-tag>
-      <n-button size="tiny" :disabled="e.busy.value" @click="input?.click()">{{ t('open') }}</n-button><n-button size="tiny" :disabled="e.busy.value" @click="pickDirectory(false)">选择资源目录</n-button><n-button v-if="root" size="tiny" :disabled="e.busy.value" @click="pickDirectory(true)">重新扫描</n-button>
+    <div class="app-toolbar"><strong>WebAet</strong>
+      <div class="file-actions">
+        <n-button size="tiny" :disabled="e.busy.value" @click="input?.click()">打开AET</n-button>
+        <n-button data-testid="close-document" size="tiny" type="error" :disabled="e.busy.value || (!e.doc.value && !e.library.sets.length)" @click="closeDialog = true">关闭</n-button>
+        <n-button size="tiny" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('保存工程', e.saveProject)">保存工程</n-button>
+        <n-button size="tiny" type="primary" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('导出 AET', e.exportBinary)">导出AET</n-button>
+        <span v-if="e.dirty.value" class="dirty" title="有未保存的修改">●</span>
+      </div>
+      <span class="toolbar-separator" aria-hidden="true" />
+      <n-button size="tiny" :disabled="e.busy.value" :title="root ? `当前目录：${root.root.name}；点击重新选择目录并扫描` : '选择资源目录，建立索引并自动匹配关联贴图'" @click="pickDirectory(!!root)">{{ root ? '重新扫描资源' : '选择资源目录' }}</n-button>
       <n-select class="asset-select" size="tiny" :disabled="e.busy.value" filterable :value="e.doc.value?.name" :options="assets" placeholder="AET" @update:value="changeAsset" />
-      <n-button data-testid="close-document" size="tiny" :disabled="e.busy.value || (!e.doc.value && !e.library.sets.length)" @click="e.closeDocument">关闭资源</n-button>
       <n-select class="scene-select" size="tiny" :disabled="e.busy.value" :value="e.sceneIndex.value" :options="scenes" placeholder="Scene" @update:value="e.selectScene" />
-      <div class="spacer" /><span v-if="e.dirty.value" class="dirty">●</span><n-button size="tiny" :disabled="e.busy.value || !e.canUndo.value" @click="e.undo">撤销</n-button><n-button size="tiny" :disabled="e.busy.value || !e.canRedo.value" @click="e.redo">重做</n-button>
-      <n-button size="tiny" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('保存工程', e.saveProject)">保存工程</n-button><n-button size="tiny" type="primary" :disabled="e.busy.value || !e.doc.value" @click="e.runOperation('导出 AET', e.exportBinary)">导出 AET</n-button>
+      <div class="spacer" /><n-button size="tiny" :disabled="e.busy.value || !e.canUndo.value" @click="e.undo">撤销</n-button><n-button size="tiny" :disabled="e.busy.value || !e.canRedo.value" @click="e.redo">重做</n-button>
       <n-button size="tiny" @click="resetLayout">重置布局</n-button>
       <n-button size="tiny" @click="locale = locale === 'zh-CN' ? 'en' : 'zh-CN'">{{ t('language') }}</n-button>
     </div>
+    <div v-if="missingResources" class="resource-hint" role="status"><span>{{ e.library.sets.length ? '部分关联贴图尚未加载，画布可能显示不完整。' : '当前 AET 尚未加载关联贴图，画布可能显示不完整。' }}请选择资源目录后重新打开该 AET，或通过“打开AET”补充导入 Sprite / FARC。</span><n-button size="tiny" @click="pickDirectory(!!root)">{{ root ? '重新扫描资源' : '选择资源目录' }}</n-button></div>
+    <n-modal v-model:show="closeDialog" preset="dialog" class="editor-dialog" title="关闭当前 AET" :mask-closable="false">
+      <template #default><p>{{ e.dirty.value ? '当前修改尚未保存，关闭将丢弃这些修改。请先保存工程或导出 AET。' : '将关闭当前 AET 并释放已加载的贴图资源。资源目录索引会保留。' }}</p></template>
+      <template #action><n-button size="small" @click="closeDialog = false">取消</n-button><n-button size="small" type="error" :disabled="e.busy.value" @click="confirmClose">确认关闭</n-button></template>
+    </n-modal>
     <input ref="input" hidden type="file" multiple accept=".bin,.farc,.webaet" @change="filesChanged" />
     <n-spin :show="e.busy.value" class="workspace-spin"><div :ref="el => workspaceHost = el as HTMLElement | undefined" class="workspace" :style="panelStyle"><LeftSidebar :editor="e" :assets="libraryAssets" @open-asset="changeAsset" @open-composition="openComposition" /><div class="panel-divider" role="separator" title="拖动调整宽度，双击恢复默认" @dblclick="resetPanels" aria-label="调整左侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'left')" /><AetStage :editor="e" @warnings="warnings = $event" /><div class="panel-divider" role="separator" title="拖动调整宽度，双击恢复默认" @dblclick="resetPanels" aria-label="调整右侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'right')" /><LayerInspector :editor="e" /></div></n-spin>
     <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" :disabled="e.busy.value" @click="input?.click()">打开 AET / Sprite</n-button></div>

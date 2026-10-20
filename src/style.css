@@ -4,6 +4,7 @@ body { font-family: Inter, system-ui, sans-serif; font-size: 12px; }
 button, input { font: inherit; }
 .editor-shell { height: 100%; display: flex; flex-direction: column; color: #d9dfe7; background: #20232a; }
 .app-toolbar, .stage-toolbar, .statusbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-shrink: 0; border-bottom: 1px solid #353b46; }
+.file-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}.toolbar-separator{width:1px;height:22px;background:#454b57;flex-shrink:0}.resource-hint{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 12px;background:#e4b16b12;color:#e4c493;border-bottom:1px solid #e4b16b33;font-size:12px;flex-shrink:0}.resource-hint .n-button{flex-shrink:0}
 .app-toolbar strong { color: #72dfc5; font-size: 16px; margin-right: 6px; }
 .asset-select { width: 230px; } .scene-select { width: 130px; }
 .spacer { flex: 1; } .dirty { color: #e7bb69; }
