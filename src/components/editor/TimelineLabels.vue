@@ -390,7 +390,7 @@ function handleExpandAll() {
               :title="item.row.visible ? '点击隐藏图层' : '点击显示图层'"
               @click="toggleLayerVisible(item.row, $event)"
             >
-              {{ item.row.visible ? '👁' : '─' }}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path v-if="!item.row.visible" d="m3 3 18 18"/></svg>
             </button>
             <button
               type="button"
@@ -399,7 +399,7 @@ function handleExpandAll() {
               :title="item.row.locked ? '点击解锁图层' : '点击锁定图层'"
               @click="toggleLayerLocked(item.row, $event)"
             >
-              {{ item.row.locked ? '🔒' : '🔓' }}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="item.row.locked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"/></svg>
             </button>
 
             <!-- Layer Name -->
@@ -595,7 +595,9 @@ function handleExpandAll() {
 .arrow-btn:hover {
   color: #fff;
 }
+.flag-btn svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.7; }
 .flag-btn {
+  width:22px; height:22px; flex:0 0 22px; display:inline-flex; align-items:center; justify-content:center; border-radius:3px;
   background: none;
   border: none;
   cursor: pointer;
@@ -603,8 +605,9 @@ function handleExpandAll() {
   padding: 0 2px;
   color: #8b9baa;
 }
-.flag-btn:hover {
-  color: #fff;
+.flag-btn:hover, .flag-btn:focus-visible {
+  background:#72c6b222;
+  color: #72c6b2;
 }
 .flag-btn.disabled {
   color: #555e69;

@@ -13,7 +13,6 @@ const { editor: e } = defineProps<{ editor: Editor }>()
 const emit = defineEmits<{ warnings: [warnings: string[]] }>()
 const canvas = ref<HTMLCanvasElement>(), host = ref<HTMLElement>(), zoom = ref(1), pan = ref({ x: 0, y: 0 }), wireframe = ref(false), isolate = ref(false)
 const perspective = ref(false), transparentExport = ref(false)
-const multipleBranches = computed(() => { e.version.value; return !isolate.value && (e.composition.value?.layers.filter(l => l.itemType === 3 && !!(l.flags & 1) && e.frame.value >= l.start && e.frame.value < l.end).length ?? 0) > 1 })
 const view3D = ref(false), yaw = ref(25), pitch = ref(-20)
 const evaluator = computed(() => { e.version.value; return e.scene.value ? createSceneEvaluator(e.scene.value) : null })
 const secondaryChoice = ref('')
@@ -68,17 +67,20 @@ function pointerUp(event: PointerEvent) {
   const bounds = canvas.value!.getBoundingClientRect(), dx = (event.clientX - down.x) / scale, dy = (event.clientY - down.y) / scale
   const hit = hitTest(hits, (down.x - bounds.left - origin.x) / scale, (down.y - bounds.top - origin.y) / scale)
   if (hit) {
-    e.selectedId.value = hit.layer.offset
-    if (!secondaryEnabled.value && !view3D.value && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5 && e.composition.value?.layers.some(l => l.offset === hit.layer.offset)) {
-      let parent = hit.layer.parent, world = identity4(), seen = new Set<number>()
+    // Select the immediate instance in the current composition, not its leaf.
+    const layer = e.composition.value?.layers.find(l => l.offset === hit.path[0])
+    if (!layer) { down = null; return }
+    e.actions.selectLayer({ sceneIndex: e.sceneIndex.value, compositionId: e.compositionId.value, layerId: layer.offset })
+    if (!secondaryEnabled.value && !view3D.value && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5 && e.composition.value?.layers.some(l => l.offset === layer.offset)) {
+      let parent = layer.parent, world = identity4(), seen = new Set<number>()
       const chain = []
       while (parent && !seen.has(parent)) { seen.add(parent); const l = e.composition.value.layers.find(l => l.offset === parent); if (!l) break; chain.unshift(l); parent = l.parent }
       for (const l of chain) world = multiply4(world, layerMatrix4(l, e.frame.value))
       const matrix = orthographicMatrix(world)
       const determinant = matrix[0] * matrix[3] - matrix[1] * matrix[2]
-      if (Math.abs(determinant) > 1e-9) e.translateLayer(hit.layer.offset, (matrix[3] * dx - matrix[2] * dy) / determinant, (-matrix[1] * dx + matrix[0] * dy) / determinant)
+      if (Math.abs(determinant) > 1e-9) e.translateLayer(layer.offset, (matrix[3] * dx - matrix[2] * dy) / determinant, (-matrix[1] * dx + matrix[0] * dy) / determinant)
     }
-  } else e.selectedId.value = null
+  } else e.actions.selectLayer(null)
   down = null
 }
 function focusSelected() {
@@ -132,7 +134,7 @@ function reset() { yaw.value = 25; pitch.value = -20; zoom.value = 1; pan.value 
       <label>子菜单（部分模拟） <select data-testid="secondary-preview" v-model="secondaryChoice" :disabled="e.busy.value || view3D || isolate"><option value="">原始分支 / 单时钟</option><option value="arcade">Arcade on + Mix off</option><option value="mix">Mix on + Arcade off</option></select></label>
       <span>仅 2D 非隔离，暂停画布拖动编辑；on 帧限制 10–90，off 固定 6；叠于其他 UI 之上，游戏顺序未核对。文字/版本/切换动画不模拟；原生场景 PNG 仍为原始合成。</span>
     </div>
-    <div v-if="multipleBranches" class="branch-hint" data-testid="branch-hint">当前叠加多个子合成，可能包含游戏按状态单独调用的分支；此预览不模拟菜单状态。选择图层后开启 Isolate 可单独检查。<n-button size="tiny" :disabled="e.selectedId.value === null" @click="isolate = true">隔离选中分支</n-button></div>
+
     <div ref="host" class="stage-host"><canvas ref="canvas" data-testid="aet-stage" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="down = null" @wheel.prevent="wheelZoom" /></div>
     <footer>{{ view3D ? '3D 自由观察 · 左键拖动旋转 · 仅改变观察相机，不修改资源 · 尚无完整 AET 相机透视' : '2D · 拖动图层编辑位置' }} · 滚轮缩放 · 中键 / Alt 拖动平移 · 单击选择</footer>
   </section>

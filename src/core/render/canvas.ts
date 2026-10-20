@@ -74,7 +74,7 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: DrawItem[], libr
       ctx.fillStyle = '#738dac22'; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = '#748da8'; ctx.lineWidth = 1; ctx.strokeRect(0, 0, w, h)
       ctx.fillStyle = '#adc2da'; ctx.font = '14px sans-serif'; ctx.fillText(item.sourceName || item.layer.name, 4, 17, Math.max(1, w - 8))
     }
-    if (selected === item.layer.offset) { ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = '#62d8c1'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h) }
+    if (selected !== null && item.path.includes(selected)) { ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = '#62d8c1'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, w, h) }
     ctx.restore()
     if (collectHits) hits.push({ item, points: [point(item.matrix, 0, 0), point(item.matrix, w, 0), point(item.matrix, w, h), point(item.matrix, 0, h)] })
   }

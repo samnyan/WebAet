@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import {
   NModal,
-  NCard,
+  NDialog,
   NRadioGroup,
   NRadioButton,
   NInputNumber,
@@ -276,19 +276,19 @@ function onKeydown(ev: KeyboardEvent) {
     transform-origin="center"
     @update:show="emit('update:show', $event)"
   >
-    <n-card
+    <n-dialog
+      class="editor-dialog"
       style="width: 520px; max-width: 90vw"
+      :show-icon="false"
+      @close="close"
       title="动画编辑工具"
       :bordered="false"
-      size="small"
       role="dialog"
       aria-modal="true"
       data-testid="animation-tools-dialog"
       @keydown="onKeydown"
     >
-      <template #header-extra>
-        <n-button quaternary circle size="tiny" @click="close">✕</n-button>
-      </template>
+
 
       <!-- Target Info -->
       <div class="target-info">
@@ -370,17 +370,7 @@ function onKeydown(ev: KeyboardEvent) {
               </template>
             </div>
 
-            <div class="actions-row">
-              <n-button
-                type="primary"
-                size="small"
-                :disabled="isLayerLocked || (scope === 'property' ? !canRetimeProperty : !canRetimeLayerScope)"
-                data-testid="dialog-apply-retime"
-                @click="handleApplyRetime"
-              >
-                应用重定时
-              </n-button>
-            </div>
+
           </div>
         </n-tab-pane>
 
@@ -401,17 +391,7 @@ function onKeydown(ev: KeyboardEvent) {
                 data-testid="dialog-value-offset"
               />
             </div>
-            <div class="actions-row">
-              <n-button
-                type="primary"
-                size="small"
-                :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount === 0"
-                data-testid="dialog-apply-offset"
-                @click="handleApplyOffset"
-              >
-                应用数值平移
-              </n-button>
-            </div>
+
           </div>
         </n-tab-pane>
 
@@ -422,17 +402,7 @@ function onKeydown(ev: KeyboardEvent) {
             <div v-if="scope === 'layer'" class="alert-hint">
               反转仅作用于当前属性。
             </div>
-            <div class="actions-row" style="margin-top: 16px">
-              <n-button
-                type="warning"
-                size="small"
-                :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount < 2"
-                data-testid="dialog-apply-reverse"
-                @click="handleApplyReverse"
-              >
-                反转当前轨道关键帧
-              </n-button>
-            </div>
+
           </div>
         </n-tab-pane>
 
@@ -485,12 +455,42 @@ function onKeydown(ev: KeyboardEvent) {
         </n-tab-pane>
       </n-tabs>
 
-      <template #footer>
+      <template #action>
         <div class="footer-row">
+              <n-button v-if="activeTab === 'reverse'"
+                type="warning"
+                size="small"
+                :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount < 2"
+                data-testid="dialog-apply-reverse"
+                @click="handleApplyReverse"
+              >
+                反转当前轨道关键帧
+              </n-button>
+
+              <n-button v-if="activeTab === 'offset'"
+                type="primary"
+                size="small"
+                :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount === 0"
+                data-testid="dialog-apply-offset"
+                @click="handleApplyOffset"
+              >
+                应用数值平移
+              </n-button>
+
+              <n-button v-if="activeTab === 'retime'"
+                type="primary"
+                size="small"
+                :disabled="isLayerLocked || (scope === 'property' ? !canRetimeProperty : !canRetimeLayerScope)"
+                data-testid="dialog-apply-retime"
+                @click="handleApplyRetime"
+              >
+                应用重定时
+              </n-button>
+
           <n-button size="small" @click="close">关闭</n-button>
         </div>
       </template>
-    </n-card>
+    </n-dialog>
   </n-modal>
 </template>
 

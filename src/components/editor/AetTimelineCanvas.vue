@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { NDropdown } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import type { Keyframe } from '../../core/aet/types'
 import { resolveCurve, type PropertyRef } from '../../editor/properties'
@@ -304,6 +305,33 @@ function draw() {
   c.dataset.verticalOffset = String(top)
 }
 
+const keyMenu = ref<{ x: number; y: number; key: KeyRef; locked: boolean } | null>(null)
+function contextMenu(event: MouseEvent) {
+  keyMenu.value = null
+  if (p.disabled) return
+  const bounds = canvas.value!.getBoundingClientRect()
+  const x = event.clientX - bounds.left, y = event.clientY - bounds.top
+  if (x < p.labelsWidth || y < ruler) return
+  const item = p.rows[Math.floor((y - ruler + top) / row)]
+  if (item?.kind !== 'property' || item.property.kind !== 'channel') return
+  const curve = resolveCurve(p.editor, item.property)
+  if (!curve?.keys.length) return
+  const time = at(x), i = lower(curve.keys, time)
+  const key = [curve.keys[i - 1], curve.keys[i]].filter((k): k is Keyframe => !!k).sort((a, b) => Math.abs(a.frame - time) - Math.abs(b.frame - time))[0]
+  if (!key || Math.abs(key.frame - time) * p.pixels > 8) return
+  p.editor.workspace.requestPause()
+  p.editor.actions.selectLayer(item.property)
+  const keyRef: KeyRef = { property: item.property, frame: key.frame }
+  p.editor.actions.selectKey(keyRef)
+  const layer = p.editor.composition.value?.layers.find(l => l.offset === item.property.layerId)
+  keyMenu.value = { x: event.clientX, y: event.clientY, key: keyRef, locked: !!(layer && (layer.flags & 32)) }
+}
+function deleteContextKey() {
+  const menu = keyMenu.value
+  keyMenu.value = null
+  if (menu && !menu.locked) p.editor.actions.removeKey(menu.key)
+}
+
 function flushSeek() {
   if (input) cancelAnimationFrame(input)
   input = 0
@@ -330,6 +358,7 @@ function position(e: PointerEvent) {
 }
 
 function down(e: PointerEvent) {
+  keyMenu.value = null
   if (p.disabled || ![0, 1].includes(e.button)) return
 
   const pos = position(e)
@@ -515,6 +544,7 @@ function up(e: PointerEvent) {
 }
 
 function cancel(e?: PointerEvent) {
+  keyMenu.value = null
   if (e && canvas.value?.hasPointerCapture(e.pointerId)) {
     try {
       canvas.value.releasePointerCapture(e.pointerId)
@@ -599,7 +629,7 @@ watch(
 )
 
 watch(
-  () => [p.rows, p.revision, p.pixels, p.labelsWidth],
+  () => [p.rows, p.revision, p.pixels, p.labelsWidth, p.editor.workspace.activeLayerRef.value, p.editor.workspace.activeProperty.value, p.editor.workspace.activeKey.value],
   () => {
     schedule()
     positionHead()
@@ -653,6 +683,7 @@ defineExpose({ fit, setZoom, handleLabelsWheel })
       data-testid="timeline-canvas"
       tabindex="0"
       aria-label="分层时间线：拖动关键帧或时间轴定位，中键/Alt 平移，Shift 滚轮横向滚动，Ctrl 滚轮缩放"
+      @contextmenu.prevent="contextMenu"
       @pointerdown="down"
       @pointermove="move"
       @pointerup="up"
@@ -661,6 +692,7 @@ defineExpose({ fit, setZoom, handleLabelsWheel })
       @wheel="wheel"
     />
 
+    <n-dropdown v-if="keyMenu" trigger="manual" :show="true" :x="keyMenu.x" :y="keyMenu.y" :options="[{ key: 'delete', label: '删除关键帧', disabled: keyMenu.locked || disabled }]" @select="deleteContextKey" @clickoutside="keyMenu = null" @esc="keyMenu = null" />
     <div ref="playhead" class="aet-timeline-playhead" />
 
     <!-- Resizer bar between labels and canvas -->
