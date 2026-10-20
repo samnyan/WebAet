@@ -7,7 +7,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{vue,js,cjs,mjs,ts,cts,mts,jsx,tsx,json,jsonc,css,scss,less,html,md,mdx,yaml,yml}": "prettier --write"
   },
   "dependencies": {
     "@bis-toolkit/bcn": "^1.0.2",
@@ -23,6 +29,9 @@
     "@types/node": "^24.19.2",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "prettier": "3.9.10",
     "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",

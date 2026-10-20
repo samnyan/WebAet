@@ -13,6 +13,17 @@ pnpm preview
 
 If Linux exhausts its file-watch limit, start development with `CHOKIDAR_USEPOLLING=true pnpm dev`. Production previews do not need a file watcher.
 
+## Code formatting
+
+Prettier formats Vue single-file components, TypeScript, styles and documentation. It uses two-space indentation, single quotes, no semicolons and a 100-column print width. Vue `<script>` and `<style>` contents are not additionally indented; HTML whitespace sensitivity keeps Prettier's default `css` behavior.
+
+- `pnpm format`: format the project manually when needed.
+- `pnpm format:check`: check formatting without changing files.
+- `pnpm install`: installs the Husky Git hook through the `prepare` script.
+- `git commit`: automatically runs Prettier on supported staged files through lint-staged and stages the formatting changes. Unstaged changes in partially staged files are temporarily hidden and restored afterward; a formatter failure blocks the commit.
+
+Only staged files are formatted on commit; existing files are not reformatted until they are staged or `pnpm format` is run. Formatting does not replace type checking or structural code review.
+
 ## Workflow
 
 1. In Chromium on a secure origin (HTTPS or localhost), choose the `diva_main` resource directory. Scanning indexes paths only, not resource bytes. The index is cached in IndexedDB and reused after selecting the same directory again; use **重新扫描** after files change. Use the left **库 / Project** panel to browse resources; opening an indexed AET loads its Sprite companions on demand. Single-click selects a library preview, while double-click opens the resource. The native directory-picker workflow is assigned to manual acceptance; the single-file import/edit/download/fresh-page reopen path has been checked. See [manual acceptance](docs/manual-acceptance.md) for fixed menu states, directory checks and the distribution-license gate. Other browsers can open/drop `aet_*.bin`, matching `spr_*.farc` and optionally `spr_db.bin`; directory-handle selection has no directory-input fallback.
@@ -51,6 +62,7 @@ Reference implementations inspected: MikuMikuLibrary Aets/Sprites/Textures/Archi
 ## Verification and current boundaries
 
 Verified on supplied MegaMix resources:
+
 - 28 classic AET binaries in `rom_steam_it/rom/2d`: parse and byte-identical no-op export.
 - Real `aet_gam_cmn.bin`: 582 compositions, 2427 layers; sprite archive decoding and database binding.
 - Chromium: inspector edit, undo/redo, key insertion/value change, playback, binary download and project save/reopen.
@@ -62,6 +74,7 @@ Verified on supplied MegaMix resources:
 - Warm mounted playback with collapsed versus expanded Transform controls showed no observed callback-pacing regression in the sampled character composition. These are local headless RAF observations, not delivered rendering FPS or universal performance guarantees. See `docs/menu-playback-performance.md`; rendering/roundtrip evidence and remaining menu gaps are in `docs/menu-character-investigation.md`.
 
 Not complete game-runtime parity:
+
 - 3D transforms now use full homogeneous parent/composition matrices before orthographic projection, using ReDIVA rotation order and coordinate signs. Checked 2422 real 2D layers against the prior affine formula and mixed 3D rotation/anchor math against Chromium DOMMatrix. The 3D observation view can toggle an editor-only perspective approximation using 12×12 subdivided textured quads, preserving painter order and matte compositing. Near-plane intersections are clipped in local-plane coordinates for both mesh rendering and hit polygons; a controlled Chromium crossing-plane fixture remained visible/selectable, while a fully behind-camera fixture was omitted. Constant-depth sprites use one exact affine draw (uniform half-opacity interior verified); tilted planes still have triangle-seam quality limitations. Scratch canvases are reused for matte/perspective rendering; this does not establish a measured FPS improvement. Spatial guides currently appear only in orthographic mode. Browser checks cover depth scaling, actual raster pixels and switching a real imported resource. Camera Eye translation is applied before composition transforms following the inspected ReDIVA runtime path; full AET camera perspective is not implemented. Neither observation mode establishes game-rendering parity.
 - Sprite-to-sprite alpha Track Matte is previewed with offscreen Canvas2D compositing, following ReDIVA's back-to-front pairing (including inactive mask layers). Browser check: real `aet_gam_cmn.bin` composition 26 paired `gam_cmn_suc_eff01__n.pic` with `gam_cmn_suc_eff02__n.pic`; controlled rectangle geometry using that pair yielded alpha samples `[0, 255, 0]`. This checks pairing and compositing, not visual parity of the original textured effect.
 - Sprite matte previews support Alpha, NotAlpha, Luma and NotLuma (enum values verified in MikuMikuLibrary). Luma uses Rec.709 weights on Canvas sRGB values multiplied by mask opacity; exact game color-space/shader behavior is unverified. Chromium controlled half-opacity gray-mask checks produced interior alpha values 128/127/64/191 for modes 1–4 respectively. Pending sprite mattes now persist across recursive composition entry/exit, following ReDIVA runtime traversal; isolation retains the required following mask sprite. Controlled browser checks restructured a real sprite pair across both boundary directions, including an inactive mask; this does not establish original textured game parity. A composition layer’s own matte flag is not interpreted as whole-group masking. Unknown modes use alpha fallback with diagnostics. Unsupported blend modes use normal preview with diagnostics.
