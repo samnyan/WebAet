@@ -14,6 +14,7 @@ import {
 } from '../../editor/timelineRows'
 import { applyLayerTimeEdit, layerTimeDragDelta } from '../../editor/layerTiming'
 import type { KeyRef } from '../../editor/propertyActions'
+import { timelineSnapTargets, snapTimelineFrame } from '../../editor/timelineSnapping'
 
 const p = defineProps<{
   workArea?: WorkArea | null
@@ -71,6 +72,7 @@ let drag: {
   anchor: number
   original: number
   target: number
+  snapTargets?: number[]
   marqueeBase?: KeyRef[]
   keyGroup?: KeyRef[]
   keyRef?: KeyRef
@@ -586,6 +588,15 @@ function down(e: PointerEvent) {
           drag.keyRef = { property: item.property, frame: hitKey.frame }
           drag.original = hitKey.frame
           drag.target = hitKey.frame
+          const excluded = new Map<object, Set<number>>()
+          for (const ref of drag.keyGroup ?? [drag.keyRef]) {
+            const curve = resolveCurve(p.editor, ref.property)
+            if (!curve) continue
+            const frames = excluded.get(curve) ?? new Set<number>()
+            frames.add(Math.fround(ref.frame))
+            excluded.set(curve, frames)
+          }
+          drag.snapTargets = timelineSnapTargets(p.editor.composition.value!, new Set(), excluded)
         } else {
           drag = null
         }
@@ -642,6 +653,10 @@ function down(e: PointerEvent) {
         timeOffset: l.timeOffset,
       }))
     }
+    drag.snapTargets = timelineSnapTargets(
+      p.editor.composition.value!,
+      new Set(drag.groupDrag?.map((member) => member.id) ?? [layer.offset]),
+    )
     p.editor.workspace.requestPause()
     schedule()
     return
@@ -661,13 +676,25 @@ function updateDrag() {
       drag.target = layerTimeDragDelta(
         drag.layerDrag,
         drag.mode,
-        at(drag.x) - drag.anchor,
-        p.snap !== false,
+        snapTimelineFrame(
+          (drag.mode === 'trim-end' ? drag.layerDrag.end : drag.layerDrag.start) +
+            at(drag.x) -
+            drag.anchor,
+          drag.snapTargets ?? [],
+          p.pixels,
+          p.snap !== false,
+        ) - (drag.mode === 'trim-end' ? drag.layerDrag.end : drag.layerDrag.start),
+        false,
       )
     }
     schedule()
   } else if (drag.mode === 'key') {
-    drag.target = snapFrame(drag.original + at(drag.x) - drag.anchor)
+    drag.target = snapTimelineFrame(
+      drag.original + at(drag.x) - drag.anchor,
+      drag.snapTargets ?? [],
+      p.pixels,
+      p.snap !== false,
+    )
     schedule()
   } else {
     seek(at(drag.x))
