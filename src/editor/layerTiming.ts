@@ -1,4 +1,5 @@
 import { channels, type Composition, type Layer } from '../core/aet/types'
+import { retimeKeys } from '../core/animation/retime'
 
 export type LayerTimeEdit = 'trim-start' | 'trim-end' | 'layer-move'
 export interface LayerTimeSnapshot { start: number; end: number; timeOffset: number }
@@ -28,6 +29,28 @@ export function movedLayers(composition: Composition, ids: Set<number>, delta: n
     return [layer.offset, copy] as const
   }))
   return composition.layers.map(layer => proposals.get(layer.offset) ?? layer)
+}
+
+/** Stretch around layer start; derivative tangents scale inversely with time. */
+export function stretchedLayer(layer: Layer, duration: number): Layer {
+  if (layer.flags & 32) throw new Error('图层已锁定')
+  const oldDuration = layer.end - layer.start
+  const end = Math.fround(layer.start + duration), ratio = (end - layer.start) / oldDuration
+  if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(end) || !Number.isFinite(ratio) || ratio <= 0) throw new Error('拉伸时长无效或超出 float32 范围')
+  const copy: Layer = JSON.parse(JSON.stringify(layer))
+  copy.end = end
+  copy.timeScale = Math.fround(layer.timeScale / ratio)
+  if (!Number.isFinite(copy.timeScale) || (layer.timeScale !== 0 && copy.timeScale === 0)) throw new Error('拉伸后素材速率超出 float32 范围')
+  const curves = [...Object.values(copy.video?.curves ?? {}), ...Object.values(copy.video?.extra ?? {}), ...copy.audio]
+  for (const curve of curves) {
+    if (curve.keys.length < 2) continue
+    curve.keys = retimeKeys(curve.keys, ratio, (curve.keys[0]!.frame - layer.start) * (ratio - 1))
+  }
+  for (const marker of copy.markers) {
+    marker.frame = Math.fround(layer.start + (marker.frame - layer.start) * ratio)
+    if (!Number.isFinite(marker.frame)) throw new Error('拉伸导致标记时间溢出')
+  }
+  return copy
 }
 
 /** Slip source sampling only: local(t) gains sourceDelta; own transforms/range remain fixed. */

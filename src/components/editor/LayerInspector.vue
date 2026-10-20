@@ -8,6 +8,7 @@ import SceneInspector from './SceneInspector.vue'
 import PropertyEditorRow from './properties/PropertyEditorRow.vue'
 import LayerReferenceSelect from './LayerReferenceSelect.vue'
 import LayerSlipControl from './LayerSlipControl.vue'
+import LayerStretchControl from './LayerStretchControl.vue'
 import AssetPreview from './AssetPreview.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const showMaterialPicker = ref(false)
@@ -48,6 +49,7 @@ const toggle = (id: string) => e.workspace.toggleExpanded(`closed:${id}`, 'inspe
       <div class="inspector-scroll">
         <LayerReferenceSelect :editor="e" />
         <LayerSlipControl :editor="e" />
+        <LayerStretchControl :editor="e" />
         <section v-for="group in groups.filter(g => inGroup(g.id).length)" :key="group.id" class="inspector-group"><button class="group-heading" :aria-expanded="expanded(group.id)" @click="toggle(group.id)">{{ expanded(group.id) ? '▾' : '▸' }} {{ group.label }}</button>
           <div v-if="expanded(group.id)">
             <PropertyEditorRow v-for="p in inGroup(group.id)" :key="p.id" :editor="e" :property="p.property" />
