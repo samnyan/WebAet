@@ -1,107 +1,56 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NInput, NInputNumber, NCheckbox, NSelect, NButton } from 'naive-ui'
-import { channels, channels3D } from '../../core/aet/types'
 import type { Editor } from '../../editor/state'
+import { listLayerProperties, type PropertyGroupId } from '../../editor/properties'
+import type { PreviewTarget } from '../../editor/workspaceAssets'
 import SceneInspector from './SceneInspector.vue'
-import { canParent } from '../../core/animation/parenting'
-import { canReferenceComposition } from '../../core/animation/compositionReference'
+import PropertyEditorRow from './properties/PropertyEditorRow.vue'
+import AssetPreview from './AssetPreview.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const layer = computed(() => { e.version.value; return e.selected.value })
-const owner = computed(() => { e.version.value; return e.scene.value?.compositions.find(c => c.layers.some(l => l.offset === layer.value?.offset)) })
-const parentOptions = computed(() => {
-  e.version.value
-  const c = owner.value, l = layer.value
-  return [{ value: 0, label: '无 / None' }, ...(c && l ? c.layers.map(p => ({ value: p.offset, label: p.name, disabled: !canParent(c, l.offset, p.offset) })) : [])]
-})
-function parent(value: number) {
-  const c = owner.value, l = layer.value
-  if (!c || !l || (l.flags & 32) || !canParent(c, l.offset, value)) return
-  e.edit(() => l.parent = value)
-}
-const compositionOptions = computed(() => {
-  e.version.value
-  const scene = e.scene.value, parent = owner.value
-  return scene && parent ? scene.compositions.map((c, i) => ({ value: c.offset, label: `${i} · ${c.layers.slice(0, 2).map(l => l.name).join(', ')} · ${c.layers.length} layers`, disabled: !canReferenceComposition(scene, parent.offset, c.offset) })) : []
-})
-function compositionSource(value: number) {
-  const l = layer.value, scene = e.scene.value, parent = owner.value
-  if (!l || l.itemType !== 3 || (l.flags & 32) || !scene || !parent || !canReferenceComposition(scene, parent.offset, value)) return
-  e.edit(() => l.item = value)
-}
-const videoOptions = computed(() => { e.version.value; return e.scene.value?.videos.map((v, i) => ({ value: v.offset, label: `${i} · ${v.sources[0]?.name || '纯色'} · ${v.width}×${v.height}` })) ?? [] })
-function source(value: number) {
-  const l = layer.value
-  if (!l || l.itemType !== 1 || (l.flags & 32) || !e.scene.value?.videos.some(v => v.offset === value)) return
-  e.edit(() => l.item = value)
-}
+const properties = computed(() => { e.version.value; const ref = e.workspace.activeLayerRef.value; return ref ? listLayerProperties(e, ref) : [] })
+const groups: { id: PropertyGroupId; label: string }[] = [{ id: 'layer', label: '图层' }, { id: 'source', label: '素材引用' }, { id: 'transform', label: '变换' }, { id: 'appearance', label: '外观' }, { id: 'markers', label: 'Markers' }]
+const inGroup = (id: PropertyGroupId) => properties.value.filter(p => p.group === id && !(p.property.kind === 'layer' && p.property.field === 'name'))
+const name = computed(() => properties.value.find(p => p.property.kind === 'layer' && p.property.field === 'name'))
 const sourceDetails = computed(() => {
   e.version.value; e.resourceVersion.value
-  const selected = layer.value
-  const video = selected?.itemType === 1 ? e.scene.value?.videos.find(v => v.offset === selected.item) : undefined
-  return video?.sources.map((source, index) => {
-    const entry = e.library.find(source.name, source.id)
-    return { index, name: source.name, id: source.id, resolved: !!entry, target: entry ? `${entry.sprite.name} · ${entry.sprite.width}×${entry.sprite.height} · ${entry.texture.width}×${entry.texture.height} atlas #${entry.sprite.texture}` : '未解析：请加载对应 Sprite 与 spr_db.bin' }
-  }) ?? []
+  const l = layer.value, video = l?.itemType === 1 ? e.scene.value?.videos.find(v => v.offset === l.item) : undefined
+  return video?.sources.map((s, index) => ({ ...s, index, resolved: !!e.library.find(s.name, s.id) })) ?? []
 })
-const labels = { anchorX: '锚点 X', anchorY: '锚点 Y', positionX: '位置 X', positionY: '位置 Y', rotation: '旋转 °', scaleX: '缩放 X', scaleY: '缩放 Y', opacity: '不透明度' }
-function numeric(key: 'start' | 'end' | 'timeOffset' | 'timeScale', value: number | null) {
-  const l = layer.value
-  if (value === null || !l || (l.flags & 32)) return
-  if (!Number.isFinite(Math.fround(value))) { e.error.value = '图层时间参数必须是有限 float32'; return }
-  if ((key === 'start' && !(Math.fround(value) < Math.fround(l.end))) || (key === 'end' && !(Math.fround(l.start) < Math.fround(value)))) { e.error.value = '图层时间范围必须在 float32 精度下 start < end'; return }
-  e.edit(() => { l[key] = value })
-}
-const matteOptions = [{ value: 0, label: '无 / None' }, { value: 1, label: 'Alpha' }, { value: 2, label: '反相 Alpha' }, { value: 3, label: '亮度 / Luma' }, { value: 4, label: '反相亮度 / NotLuma' }]
-const blendOptions = [{ value: 3, label: 'Normal' }, { value: 5, label: 'Add' }, { value: 6, label: 'Multiply' }, { value: 7, label: 'Screen' }, { value: 8, label: 'Overlay' }, { value: 27, label: 'Difference' }]
+const preview = computed<PreviewTarget | null>(() => {
+  e.version.value
+  const l = layer.value, sceneIndex = e.sceneIndex.value
+  if (!l) return null
+  if (l.itemType === 3) return { kind: 'composition', sceneIndex, compositionId: l.item }
+  if (l.itemType !== 1) return null
+  const video = e.scene.value?.videos.find(v => v.offset === l.item)
+  if (!video) return null
+  const index = video.sources.length <= 1 ? 0 : Math.trunc(((e.frame.value - l.start) * l.timeScale + l.timeOffset) * video.frames + .0001)
+  return { kind: 'source', sceneIndex, videoId: video.offset, sourceIndex: index }
+})
+const expanded = (id: string) => !e.workspace.isExpanded(`closed:${id}`, 'inspector')
+const toggle = (id: string) => e.workspace.toggleExpanded(`closed:${id}`, 'inspector')
 </script>
 <template>
-  <section class="panel inspector">
-    <header>属性 / Inspector</header>
-    <SceneInspector :editor="e" />
-    <div v-if="layer" class="property-scroll" :key="layer.offset" :data-version="e.version.value">
-      <label class="field"><span>名称</span><n-input size="tiny" :value="layer.name" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.name = v)" /></label>
-      <div class="property-group"><b>图层</b><code>0x{{ layer.offset.toString(16) }}</code>
-        <label class="field"><span>可见</span><n-checkbox :checked="!!(layer.flags & 1)" @update:checked="v => e.edit(() => layer!.flags = v ? layer!.flags | 1 : layer!.flags & ~1)" /></label>
-        <label class="field"><span>锁定</span><n-checkbox :checked="!!(layer.flags & 32)" @update:checked="v => e.edit(() => layer!.flags = v ? layer!.flags | 32 : layer!.flags & ~32)" /></label>
-        <label v-for="key in (['start', 'end', 'timeOffset', 'timeScale'] as const)" :key="key" class="field"><span>{{ key }}</span><n-input-number size="tiny" :value="layer[key]" :disabled="!!(layer.flags & 32)" :show-button="false" @update:value="numeric(key, $event)" /></label>
-        <label class="field" data-testid="layer-parent"><span>父级</span><n-select size="tiny" filterable :value="layer.parent" :options="parentOptions" :disabled="!!(layer.flags & 32)" @update:value="parent" /></label>
-        <p class="muted">切换父级保留本地变换，不保持世界位置；禁止循环引用。</p>
-        <n-button v-if="layer.itemType === 3" size="tiny" @click="e.compositionId.value = layer.item; e.selectedId.value = null">进入合成 ↳</n-button>
+  <section class="panel inspector" data-testid="layer-inspector">
+    <div class="inspector-tabs" role="tablist" aria-label="属性面板"><button role="tab" :aria-selected="e.workspace.rightTab.value === 'scene'" @click="e.workspace.rightTab.value = 'scene'">场景 / Scene</button><button role="tab" :aria-selected="e.workspace.rightTab.value === 'inspector'" @click="e.workspace.rightTab.value = 'inspector'">效果 / Effects</button></div>
+    <div v-if="e.workspace.rightTab.value === 'scene'" class="inspector-scroll"><SceneInspector :editor="e" /></div>
+    <template v-else-if="layer">
+      <div class="sticky-layer"><strong :title="layer.name">{{ layer.name }}</strong><small>{{ layer.itemType === 3 ? 'Comp' : 'Layer' }} · 0x{{ layer.offset.toString(16) }}</small><PropertyEditorRow v-if="name" :editor="e" :property="name.property" /></div>
+      <div class="inspector-scroll">
+        <section v-for="group in groups.filter(g => inGroup(g.id).length)" :key="group.id" class="inspector-group"><button class="group-heading" :aria-expanded="expanded(group.id)" @click="toggle(group.id)">{{ expanded(group.id) ? '▾' : '▸' }} {{ group.label }}</button>
+          <div v-if="expanded(group.id)">
+            <PropertyEditorRow v-for="p in inGroup(group.id)" :key="p.id" :editor="e" :property="p.property" />
+            <template v-if="group.id === 'source'"><AssetPreview :editor="e" :target="preview" /><button v-if="layer.itemType === 3" class="group-heading" @click="e.actions.openComposition(e.sceneIndex.value, layer.item)">进入合成 ↳</button><details v-if="sourceDetails.length"><summary>Sprite 引用（{{ sourceDetails.length }}）</summary><div class="source-list"><p v-for="source in sourceDetails.slice(0, 100)" :key="source.index">{{ source.index }} · {{ source.name }} · ID {{ source.id }} · {{ source.resolved ? '已解析' : '未解析' }}</p><small v-if="sourceDetails.length > 100">仅显示前 100 项</small></div></details><p class="muted">替换引用保留本地变换和动画，不保持原布局。</p></template>
+            <template v-if="group.id === 'transform' && inGroup('transform3d').length"><button class="group-heading nested" :aria-expanded="expanded('transform3d')" @click="toggle('transform3d')">{{ expanded('transform3d') ? '▾' : '▸' }} 3D 变换</button><div v-if="expanded('transform3d')"><PropertyEditorRow v-for="p in inGroup('transform3d')" :key="p.id" :editor="e" :property="p.property" /><p class="warning">3D 曲线可编辑导出；预览尚不包含完整游戏相机透视。</p></div></template>
+            <p v-if="group.id === 'layer'" class="muted">可见开关写入资源；左侧眼睛只控制预览。切换父级保留本地变换。</p>
+            <p v-if="group.id === 'appearance' && layer.video?.matte" class="warning">遮罩按递归倒序精灵配对；亮度色彩空间未验证游戏一致性。</p>
+          </div>
+        </section>
       </div>
-      <div v-if="layer.itemType === 3" class="property-group"><b>子合成引用</b><n-select data-testid="composition-source" size="tiny" filterable :value="layer.item" :options="compositionOptions" :disabled="!!(layer.flags & 32)" @update:value="compositionSource" /><p class="muted">替换引用保留本地变换与动画；禁止循环引用，不保持原有画面布局。</p></div>
-      <div v-if="layer.itemType === 1" class="property-group"><b>素材引用</b>
-        <n-select data-testid="layer-source" size="tiny" filterable :value="layer.item" :options="videoOptions" :disabled="!!(layer.flags & 32)" @update:value="source" />
-        <details v-if="sourceDetails.length" data-testid="source-details"><summary>Sprite 引用（{{ sourceDetails.length }}）</summary><div class="source-list"><article v-for="source in sourceDetails" :key="source.index" :data-resolved="source.resolved"><strong>{{ source.index }} · {{ source.name }}</strong><p>ID {{ source.id }} · {{ source.resolved ? '已解析' : '未解析' }}</p><p>{{ source.target }}</p></article></div></details>
-        <p v-else class="muted">纯色素材：无 Sprite 引用。</p>
-        <p class="muted">仅替换当前层引用；保留变换与动画，不修改共享素材。素材尺寸和序列长度可能不同。</p>
-      </div>
-      <div v-if="layer.video" class="property-group"><b>变换 · {{ e.frame.value.toFixed(1) }} f</b>
-        <label v-for="ch in channels" :key="ch" class="field" :data-channel="ch"><span :title="ch">{{ labels[ch] }} <small v-if="layer.video.curves[ch].keys.length > 1">◆</small></span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'opacity' || ch.startsWith('scale') ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
-        <label class="field"><span>混合</span><n-select size="tiny" :value="layer.video.blend" :options="blendOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.blend = v)" /></label>
-        <p v-if="layer.video.extra" class="warning">3D 变换使用正交投影预览，不包含相机透视。</p>
-        <label class="field" data-testid="matte-mode"><span>轨道遮罩</span><n-select size="tiny" :value="layer.video.matte" :options="matteOptions" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => layer!.video!.matte = v)" /></label>
-        <p v-if="layer.video.matte" class="warning">精灵遮罩沿递归倒序绘制与下一个精灵配对，可跨合成边界；合成层自身的遮罩标志不作为整组遮罩。亮度预览未验证游戏色彩空间一致性。</p>
-      </div>
-      <div v-if="layer.video?.extra" class="property-group"><b>3D 变换</b>
-        <label v-for="ch in channels3D" :key="ch" class="field" :data-channel="ch"><span>{{ ch }}</span><n-input-number size="tiny" :value="e.currentValue(ch)" :disabled="!!(layer.flags & 32)" :show-button="false" :step="ch === 'scaleZ' ? 0.01 : 1" @update:value="v => v !== null && e.setValue(ch, v)" /></label>
-        <p class="warning">3D 曲线参与父子矩阵计算并可导出；画布尚未应用相机 / 透视。</p>
-      </div>
-      <div v-if="layer.markers.length" class="property-group"><b>Markers</b>
-        <div v-for="m in layer.markers" :key="m.offset" class="marker-editor" :data-marker="m.offset">
-          <label class="field"><span>标记名称</span><n-input size="tiny" :value="m.name" :disabled="!!(layer.flags & 32)" @update:value="v => e.edit(() => m.name = v)" /></label>
-          <label class="field"><a @click="e.frame.value = m.frame">跳到帧 ↗</a><n-input-number size="tiny" :value="m.frame" :disabled="!!(layer.flags & 32)" :show-button="false" @update:value="v => v !== null && e.edit(() => m.frame = v)" /></label>
-        </div>
-        <p class="warning">st_* / ed_* 成对定义预览片段；结束帧包含在播放范围中。二进制重命名仅支持可打印 ASCII。</p>
-      </div>
-    </div>
-    <p v-else class="empty">选择一个图层查看属性</p>
+    </template><p v-else class="empty">选择一个图层查看效果控制</p>
   </section>
 </template>
 <style scoped>
-.source-list { max-height: 200px; overflow: auto; overflow-wrap: anywhere; font-size: 11px; }
-.source-list article { padding: 7px 0; border-bottom: 1px solid #ffffff15; }
-.source-list p { margin: 3px 0; color: #9faec2; }
-.source-list [data-resolved=false] strong { color: #e4bf81; }
-summary { cursor: pointer; margin-top: 8px; }
+.inspector{min-width:0}.inspector-tabs{display:flex;flex:none;height:35px;border-bottom:1px solid #383f49}.inspector-tabs button{flex:1;border:0;border-bottom:2px solid transparent;background:transparent;color:#9facbe;cursor:pointer}.inspector-tabs [aria-selected=true]{color:#a0f2db;border-bottom-color:#72c6b2}.inspector-scroll{flex:1;min-height:0;overflow:auto;padding:6px}.sticky-layer{flex:none;padding:8px;background:#292e36;border-bottom:1px solid #383f49}.sticky-layer strong{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.sticky-layer small{color:#8695a7}.inspector-group{margin-bottom:8px;background:#1d212844}.group-heading{width:100%;text-align:left;background:#ffffff05;border:0;color:#c7d2e3;padding:7px;cursor:pointer}.nested{padding-left:16px}.inspector-group p{padding:0 6px;font-size:11px}.source-list{max-height:180px;overflow:auto;overflow-wrap:anywhere}summary{cursor:pointer;padding:6px}
 </style>

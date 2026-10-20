@@ -7,7 +7,8 @@ import { ResourceDirectory, type DirectoryProgress } from '../editor/resourceDir
 import { parseSpriteDatabase, type SpriteDatabaseEntry } from '../core/resources/database'
 import { spriteDependencies } from '../core/resources/dependencies'
 import { unresolvedSpriteSources } from '../core/resources/audit'
-import LayerHierarchy from '../components/editor/LayerHierarchy.vue'
+import LeftSidebar from '../components/editor/LeftSidebar.vue'
+import type { WorkspaceAsset } from '../editor/workspaceAssets'
 import LayerInspector from '../components/editor/LayerInspector.vue'
 import AetStage from '../components/editor/AetStage.vue'
 import AetTimeline from '../components/editor/AetTimeline.vue'
@@ -19,6 +20,11 @@ const allWarnings = computed(() => [...warnings.value, ...resourceWarnings.value
 const scenes = computed(() => e.doc.value?.scenes.map((s, i) => ({ value: i, label: s.name })) ?? [])
 const root = ref<ResourceDirectory>(), indexedPaths = ref<string[]>([]), progress = ref<DirectoryProgress | null>(null)
 const assets = computed(() => root.value ? indexedPaths.value.filter(p => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p)).map(p => ({ value: p, label: p })) : e.documents.value.map(d => ({ value: d.name, label: d.name })))
+const activeAssetPath = ref('')
+const libraryAssets = computed<WorkspaceAsset[]>(() => assets.value.map(asset => ({ path: asset.value, name: asset.value.split('/').at(-1)!, loaded: asset.value === activeAssetPath.value || (!root.value && asset.value === e.doc.value?.name) })))
+function openComposition(sceneIndex: number, compositionId: number) {
+  e.actions.openComposition(sceneIndex, compositionId)
+}
 async function importUserFiles(files: File[]) {
   if (e.busy.value) return
   loadController = new AbortController()
@@ -55,7 +61,7 @@ async function changeAsset(name: string) {
     progress.value = { phase: '加载 AET', current: name, done: 0, total: 0 }
     const file = await root.value.file(name), bytes = new Uint8Array(await file.arrayBuffer())
     signal.throwIfAborted()
-    e.open(bytes, name); e.library.clear(); e.documents.value = []; e.resourceVersion.value++
+    e.open(bytes, name); activeAssetPath.value = name; e.library.clear(); e.documents.value = []; e.resourceVersion.value++
     const sources = e.doc.value!.scenes.flatMap(s => s.videos.flatMap(v => v.sources))
     const dbPaths = root.value.companions(name, new Set(['spr_db.bin']))
     const database: SpriteDatabaseEntry[] = []
@@ -96,7 +102,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
       <n-button size="tiny" @click="locale = locale === 'zh-CN' ? 'en' : 'zh-CN'">{{ t('language') }}</n-button>
     </div>
     <input ref="input" hidden type="file" multiple accept=".bin,.farc,.webaet" @change="filesChanged" />
-    <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LayerHierarchy :editor="e" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
+    <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LeftSidebar :editor="e" :assets="libraryAssets" @open-asset="changeAsset" @open-composition="openComposition" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
     <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" :disabled="e.busy.value" @click="input?.click()">打开 AET / Sprite</n-button></div>
     <AetTimeline :editor="e" />
     <EditorStatusBar :editor="e" :warnings="allWarnings" :progress="progress" @cancel="scanController?.abort(); loadController?.abort()" />

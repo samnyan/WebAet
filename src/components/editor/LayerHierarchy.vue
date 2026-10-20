@@ -1,66 +1,42 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { NInput, NSelect, NButton, NCheckbox } from 'naive-ui'
+import { NInput, NSelect, NButton, NCheckbox, NVirtualList } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import { menuCharacterBranches, menuCharacterVisibility } from '../../editor/menuCharacterPreview'
+import { layerTreeRows, type LayerTreeRow } from '../../editor/layerTree'
 const { editor: e } = defineProps<{ editor: Editor }>()
-const search = ref('')
+const search = ref(''), list = ref<InstanceType<typeof NVirtualList>>()
+const rows = computed(() => { e.version.value; return layerTreeRows(e.scene.value, e.sceneIndex.value, e.compositionId.value, key => e.workspace.isExpanded(key, 'layers'), search.value) })
+const options = computed(() => { e.version.value; return e.scene.value?.compositions.map((c, i) => ({ value: c.offset, label: `${i === e.scene.value!.compositions.length - 1 ? 'ROOT' : `Comp ${i}`} · ${c.layers.length}` })) ?? [] })
+const parents = computed(() => { e.version.value; return e.scene.value?.compositions.flatMap((c, i) => c.layers.filter(l => l.itemType === 3 && l.item === e.compositionId.value).map(l => ({ comp: c.offset, layer: l.offset, label: `Comp ${i} · ${l.name}` }))) ?? [] })
 const menuBranches = computed(() => { e.version.value; return menuCharacterBranches(e.composition.value) })
-const menuPreview = computed(() => {
-  const visible = menuBranches.value.filter(branch => !e.hidden.value.has(branch.value))
-  return visible.length === 1 ? visible[0]!.value : 0
-})
-function previewCharacter(value: number) {
-  if (e.busy.value || !e.composition.value) return
-  e.hidden.value = menuCharacterVisibility(e.composition.value, e.hidden.value, value || null)
-}
-const options = computed(() => e.scene.value?.compositions.map((c, i) => ({ value: c.offset, label: `${i === e.scene.value!.compositions.length - 1 ? 'ROOT' : `Comp ${i}`} · ${c.layers.length} · ${c.layers.slice(0, 2).map(l => l.name).join(', ')}` })) ?? [])
-const layers = computed(() => { e.version.value; return e.composition.value?.layers.filter(l => l.name.toLowerCase().includes(search.value.toLowerCase())) ?? [] })
-const parents = computed(() => {
-  e.version.value
-  return e.scene.value?.compositions.flatMap((c, i) => c.layers.filter(l => l.itemType === 3 && l.item === e.compositionId.value).map(l => ({ composition: c.offset, layer: l.offset, label: `Comp ${i} · ${l.name}` }))) ?? []
-})
-function returnTo(composition: number, layer: number | null = null) { search.value = ''; e.compositionId.value = composition; e.selectedId.value = layer }
-function visibility(id: number, visible: boolean) { const set = new Set(e.hidden.value); if (visible) set.delete(id); else set.add(id); e.hidden.value = set }
-function enter(id: number) { returnTo(id) }
-const list = ref<HTMLElement>()
-watch(() => e.selectedId.value, async () => { await nextTick(); list.value?.querySelector('.selected')?.scrollIntoView({ block: 'nearest' }) })
+const menuPreview = computed(() => { const visible = menuBranches.value.filter(b => !e.hidden.value.has(b.value)); return visible.length === 1 ? visible[0]!.value : 0 })
+function previewCharacter(value: number) { if (!e.busy.value && e.composition.value) e.hidden.value = menuCharacterVisibility(e.composition.value, e.hidden.value, value || null) }
+function enter(id: number) { search.value = ''; e.actions.openComposition(e.sceneIndex.value, id) }
+function select(row: LayerTreeRow) { if (!e.busy.value) e.actions.selectLayer(row.ref) }
+function toggle(row: LayerTreeRow) { if (row.expandable) e.workspace.toggleExpanded(row.key, 'layers') }
 function keyboard(event: KeyboardEvent) {
-  if (event.target !== list.value || event.ctrlKey || event.metaKey || event.altKey || event.isComposing || e.busy.value) return
-  const index = layers.value.findIndex(l => l.offset === e.selectedId.value)
-  if (event.key === 'Enter') {
-    const layer = layers.value[index]
-    if (layer?.itemType === 3) { event.preventDefault(); event.stopPropagation(); enter(layer.item) }
-    return
-  }
-  if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key) || !layers.value.length) return
+  if ((event.target as HTMLElement).closest('input,button,[role=checkbox]') || e.busy.value || event.isComposing) return
+  const index = rows.value.findIndex(r => r.ref.layerId === e.selectedId.value)
+  const row = rows.value[index]
+  if (event.key === 'Enter' && row?.layer.itemType === 3) { event.preventDefault(); event.stopPropagation(); enter(row.layer.item); return }
+  if (row && ['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); event.stopPropagation(); const open = e.workspace.isExpanded(row.key, 'layers'); if ((event.key === 'ArrowRight') !== open) toggle(row); return }
+  if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key) || !rows.value.length) return
   event.preventDefault(); event.stopPropagation()
-  const next = event.key === 'Home' ? 0 : event.key === 'End' ? layers.value.length - 1 : index < 0 ? 0 : Math.max(0, Math.min(layers.value.length - 1, index + (event.key === 'ArrowUp' ? -1 : 1)))
-  e.selectedId.value = layers.value[next]!.offset
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.value.length - 1 : Math.max(0, Math.min(rows.value.length - 1, index + (event.key === 'ArrowUp' ? -1 : 1)))
+  select(rows.value[next]!)
 }
-
+watch(() => e.selectedId.value, async id => { await nextTick(); const row = rows.value.find(r => r.ref.layerId === id); if (row) list.value?.scrollTo({ key: row.key }) })
 </script>
 <template>
-  <section class="panel hierarchy">
-    <header>图层 / Layers <span>{{ e.composition.value?.layers.length ?? 0 }}</span></header>
-    <div class="panel-controls"><n-select size="tiny" filterable :value="e.compositionId.value" :options="options" @update:value="enter" /><n-input v-model:value="search" size="tiny" placeholder="搜索图层 / Filter" /></div>
-    <div v-if="e.scene.value && e.compositionId.value !== e.scene.value.compositions.at(-1)?.offset" class="panel-controls">
-      <n-button data-testid="composition-root" size="tiny" @click="returnTo(e.scene.value!.compositions.at(-1)!.offset)">⌂ 根合成</n-button>
-      <n-button v-for="parent in parents" :key="parent.layer" data-testid="composition-parent" size="tiny" :title="parent.label" @click="returnTo(parent.composition, parent.layer)">↑ {{ parent.label }}</n-button>
-      <small v-if="!parents.length">无上级引用</small>
-    </div>
-    <div v-if="menuBranches.length" class="panel-controls" title="仅预览：选择一个菜单角色分支，保留其他 UI；不模拟完整游戏控制器，不写入 AET。可见性复选框仍可自定义。">
-      <small>菜单角色预览 · 不写入 AET</small>
-      <n-select data-testid="menu-character-preview" size="tiny" :disabled="e.busy.value" :value="menuPreview" :options="[{ value: 0, label: '全部 / 自定义（原始叠加）' }, ...menuBranches.map(b => ({ value: b.value, label: b.label }))]" @update:value="previewCharacter" />
-    </div>
-    <div ref="list" class="layer-list" tabindex="0" aria-label="图层列表：上下键选择，Home/End 跳转，Enter 进入合成" @keydown="keyboard">
-      <div v-for="layer in layers" :key="layer.offset" class="layer-row" :class="{ selected: e.selectedId.value === layer.offset, dim: e.hidden.value.has(layer.offset) || !(layer.flags & 1) }" @click="e.selectedId.value = layer.offset" @dblclick="layer.itemType === 3 && enter(layer.item)">
-        <n-checkbox size="small" :checked="!e.hidden.value.has(layer.offset)" @click.stop @update:checked="visibility(layer.offset, $event)" />
-        <span class="layer-kind" :title="['None', 'Video', 'Audio', 'Composition'][layer.itemType]">{{ ['◇', '▧', '♫', '▣'][layer.itemType] }}</span>
-        <span class="layer-name" :title="layer.name">{{ layer.name }}</span>
-        <n-button v-if="layer.itemType === 3" text size="tiny" @click.stop="enter(layer.item)">↳</n-button>
-      </div>
-      <p v-if="!layers.length" class="empty">暂无图层</p>
-    </div>
+  <section class="panel hierarchy" data-testid="layer-tree">
+    <div class="panel-controls"><n-select size="tiny" filterable :value="e.compositionId.value" :options="options" @update:value="enter" /><n-input v-model:value="search" size="tiny" clearable placeholder="搜索所有图层" /></div>
+    <div v-if="e.scene.value && e.compositionId.value !== e.scene.value.compositions.at(-1)?.offset" class="panel-controls"><n-button size="tiny" @click="enter(e.scene.value!.compositions.at(-1)!.offset)">⌂ 根合成</n-button><n-button v-for="parent in parents" :key="parent.layer" size="tiny" @click="enter(parent.comp); e.actions.selectLayer({ sceneIndex: e.sceneIndex.value, compositionId: parent.comp, layerId: parent.layer })">↑ {{ parent.label }}</n-button></div>
+    <div v-if="menuBranches.length" class="panel-controls"><small>菜单角色预览 · 不写入 AET</small><n-select data-testid="menu-character-preview" size="tiny" :disabled="e.busy.value" :value="menuPreview" :options="[{ value: 0, label: '全部 / 自定义（原始叠加）' }, ...menuBranches.map(b => ({ value: b.value, label: b.label }))]" @update:value="previewCharacter" /></div>
+    <div class="tree-host" tabindex="0" role="tree" aria-label="图层树" @keydown="keyboard"><n-virtual-list ref="list" :items="rows" :item-size="28" key-field="key" class="tree-list"><template #default="{ item }"><div class="tree-row" :class="{ selected: e.selectedId.value === item.ref.layerId, dim: e.hidden.value.has(item.layer.offset) || !(item.layer.flags & 1) }" :style="{ paddingLeft: `${item.depth * 14 + 4}px` }" role="treeitem" :aria-level="item.depth + 1" :aria-expanded="item.expandable ? e.workspace.isExpanded(item.key, 'layers') : undefined" :aria-selected="e.selectedId.value === item.ref.layerId" @click="select(item)" @dblclick="item.layer.itemType === 3 && enter(item.layer.item)"><button class="expand" :disabled="!item.expandable" aria-label="展开或收起子合成" @click.stop="toggle(item)">{{ item.expandable ? e.workspace.isExpanded(item.key, 'layers') ? '▾' : '▸' : '·' }}</button><n-checkbox size="small" :checked="!e.hidden.value.has(item.layer.offset)" title="预览可见（共享引用，不写入资源）" @click.stop @dblclick.stop @update:checked="e.actions.setPreviewVisible(item.ref, $event)" /><span class="name" :title="item.layer.name">{{ item.layer.name }}</span><small v-if="item.layer.itemType === 3" class="comp-tag">Comp</small><small v-if="item.warning" :title="item.warning">⚠</small></div></template></n-virtual-list></div>
+    <p v-if="!rows.length" class="empty">暂无图层</p>
   </section>
 </template>
+<style scoped>
+.tree-host{flex:1;min-height:0;outline:none}.tree-list{height:100%}.tree-row{display:flex;align-items:center;gap:6px;height:28px;cursor:pointer;padding-right:6px}.tree-row:hover{background:#ffffff09}.selected{background:#385951}.expand{width:18px;flex:none;border:0;background:transparent;color:inherit;cursor:pointer}.expand:disabled{opacity:.3}.name{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.comp-tag{font-size:9px;color:#a9bfdc;background:#7188af22;padding:1px 4px;border-radius:3px;flex:none}
+</style>

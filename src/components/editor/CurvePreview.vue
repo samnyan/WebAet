@@ -29,6 +29,9 @@ const playhead = computed(() => 12 + (props.frame - props.start) / (props.end - 
     </svg>
     <small>{{ graph.low.toPrecision(5) }} … {{ graph.high.toPrecision(5) }} · Bézier 控制包络</small>
   </div>
+  <div v-else class="curve-preview curve-empty" data-testid="curve-preview">
+    <span class="empty-text">选择含关键帧的动画属性通道以预览 Hermite 曲线</span>
+  </div>
 </template>
 <style scoped>
 .curve-preview { position: relative; flex: 0 0 84px; min-height: 84px; background: #161b24; border-top: 1px solid #303746; }
@@ -36,4 +39,6 @@ svg { touch-action: none; cursor: crosshair; display: block; width: 100%; height
 .curve-key { cursor: pointer; }
 line { pointer-events: none; }
 small { position: absolute; right: 8px; top: 2px; color: #a6b2c5; pointer-events: none; }
+.curve-empty { display: flex; align-items: center; justify-content: center; }
+.empty-text { font-size: 11px; color: #6a778a; user-select: none; }
 </style>

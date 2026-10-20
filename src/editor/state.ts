@@ -1,4 +1,4 @@
-import { computed, markRaw, ref, shallowRef, toRaw, triggerRef } from 'vue'
+import { computed, markRaw, ref, shallowRef, toRaw, triggerRef, watch } from 'vue'
 import { parseAet } from '../core/aet/reader'
 import { writeAet } from '../core/aet/writer'
 import { videoCurve, type AetDocument, type EditableChannel, type Scene } from '../core/aet/types'
@@ -8,6 +8,9 @@ import { parseSpriteSet } from '../core/resources/sprites'
 import { parseSpriteDatabase } from '../core/resources/database'
 import { sampleCurve } from '../core/animation/curves'
 import { keysWithValue } from '../core/animation/setValue'
+import { getSceneOwnerIndex, resolveCurve, resolveLayer } from './properties'
+import { createWorkspaceState } from './workspaceState'
+import { createPropertyActions } from './propertyActions'
 
 export function createEditor() {
   const doc = shallowRef<AetDocument | null>(null), library = markRaw(new SpriteLibrary())
@@ -29,11 +32,105 @@ export function createEditor() {
   const composition = computed(() => scene.value?.compositions.find(c => c.offset === compositionId.value) ?? null)
   const selected = computed(() => { version.value; return scene.value?.compositions.flatMap(c => c.layers).find(l => l.offset === selectedId.value) ?? null })
   const documents = shallowRef<{ name: string; bytes: Uint8Array }[]>([])
+
+  const workspace = createWorkspaceState({
+    doc,
+    sceneIndex,
+    compositionId,
+    selectedId,
+    frame,
+    version,
+    scene,
+    composition,
+    selectScene,
+  })
+
+  let isSyncingSelection = false
+  const origSelectLayer = workspace.selectLayer
+  workspace.selectLayer = (ref) => {
+    if (isSyncingSelection) return
+    isSyncingSelection = true
+    try {
+      origSelectLayer(ref)
+    } finally {
+      isSyncingSelection = false
+    }
+  }
+
+  watch(selectedId, (id) => {
+    if (isSyncingSelection) return
+    isSyncingSelection = true
+    try {
+      if (id === null) {
+        workspace.activeLayerRef.value = null
+        workspace.activeProperty.value = null
+        workspace.activeKey.value = null
+        return
+      }
+      if (composition.value?.layers.some(l => l.offset === id)) {
+        workspace.activeLayerRef.value = {
+          sceneIndex: sceneIndex.value,
+          compositionId: compositionId.value,
+          layerId: id,
+        }
+      } else {
+        const ownerIndex = getSceneOwnerIndex(scene.value, version.value)
+        const ownerComp = ownerIndex.layerToComp.get(id)
+        if (ownerComp !== undefined) {
+          compositionId.value = ownerComp
+          frame.value = scene.value?.start ?? 0
+          workspace.activeLayerRef.value = {
+            sceneIndex: sceneIndex.value,
+            compositionId: ownerComp,
+            layerId: id,
+          }
+        } else {
+          workspace.activeLayerRef.value = null
+        }
+      }
+      workspace.activeProperty.value = null
+      workspace.activeKey.value = null
+    } finally {
+      isSyncingSelection = false
+    }
+  }, { flush: 'sync' })
+
+  const actions = createPropertyActions({
+    doc,
+    sceneIndex,
+    compositionId,
+    frame,
+    version,
+    busy,
+    error,
+    hidden,
+    scene,
+    composition,
+    edit,
+  }, workspace)
   const snapshot = () => structuredClone(toRaw(doc.value!.scenes))
   let savedScenes = ''
   function markSaved() { savedScenes = JSON.stringify(doc.value?.scenes); dirty.value = false }
   function updateDirty() { dirty.value = JSON.stringify(doc.value?.scenes) !== savedScenes }
   function refresh() { version.value++; triggerRef(doc) }
+  function revalidateSelection() {
+    if (workspace.activeLayerRef.value) {
+      const l = resolveLayer({ doc }, workspace.activeLayerRef.value)
+      if (!l) {
+        workspace.activeLayerRef.value = null
+        workspace.activeProperty.value = null
+        workspace.activeKey.value = null
+        selectedId.value = null
+      }
+    }
+    if (workspace.activeKey.value) {
+      const c = resolveCurve({ doc }, workspace.activeKey.value.property)
+      const targetTime = Math.fround(workspace.activeKey.value.frame)
+      if (!c || !c.keys.some(k => Math.fround(k.frame) === targetTime)) {
+        workspace.activeKey.value = null
+      }
+    }
+  }
   function edit(action: () => void) {
     if (busy.value || !doc.value) return
     const before = snapshot()
@@ -41,24 +138,34 @@ export function createEditor() {
       action()
       if (JSON.stringify(before) === JSON.stringify(doc.value.scenes)) return
       undoStack.push(before); if (undoStack.length > 50) undoStack.shift(); redoStack.length = 0
-      historyVersion.value++; updateDirty(); refresh()
+      historyVersion.value++; updateDirty(); refresh(); revalidateSelection()
     } catch (e) { doc.value.scenes = before; refresh(); error.value = String(e) }
   }
-  function undo() { if (busy.value || !doc.value || !undoStack.length) return; redoStack.push(snapshot()); doc.value.scenes = undoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
-  function redo() { if (busy.value || !doc.value || !redoStack.length) return; undoStack.push(snapshot()); doc.value.scenes = redoStack.pop()!; historyVersion.value++; updateDirty(); refresh() }
+  function undo() { if (busy.value || !doc.value || !undoStack.length) return; redoStack.push(snapshot()); doc.value.scenes = undoStack.pop()!; historyVersion.value++; updateDirty(); refresh(); revalidateSelection() }
+  function redo() { if (busy.value || !doc.value || !redoStack.length) return; undoStack.push(snapshot()); doc.value.scenes = redoStack.pop()!; historyVersion.value++; updateDirty(); refresh(); revalidateSelection() }
   function selectScene(index: number) {
     sceneIndex.value = index; const s = doc.value?.scenes[index]
     compositionId.value = s?.compositions.at(-1)?.offset ?? 0; selectedId.value = null; frame.value = s?.start ?? 0; hidden.value = new Set()
+    workspace.activeLayerRef.value = null
+    workspace.activeProperty.value = null
+    workspace.activeKey.value = null
+    workspace.playing.value = false
   }
   function closeDocument() {
     if (busy.value || dirty.value && !window.confirm('当前修改尚未保存，关闭资源会丢弃修改。继续？')) return
     doc.value = null; documents.value = []; library.clear(); resourceVersion.value++
     undoStack.length = 0; redoStack.length = 0; historyVersion.value++
     sceneIndex.value = 0; compositionId.value = 0; selectedId.value = null; frame.value = 0; hidden.value = new Set()
+    workspace.activeLayerRef.value = null
+    workspace.activeProperty.value = null
+    workspace.activeKey.value = null
+    workspace.playing.value = false
+    workspace.docSession.value++
     error.value = ''; notices.value = []; markSaved(); refresh()
   }
   function open(bytes: Uint8Array, name: string) {
     const parsed = markRaw(parseAet(bytes, name)); doc.value = parsed; undoStack.length = 0; redoStack.length = 0; historyVersion.value++; markSaved(); selectScene(0); refresh()
+    workspace.docSession.value++
   }
   async function importFiles(files: File[], signal?: AbortSignal, report?: (name: string, done: number, total: number) => void) {
     const projects = files.filter(file => /\.webaet$/i.test(file.name))
@@ -93,9 +200,13 @@ export function createEditor() {
     finally { busy.value = wasBusy }
   }
   function setValue(channel: EditableChannel, value: number) {
-    const l = selected.value; if (!l?.video || (l.flags & 32)) return
-    const curve = videoCurve(l.video, channel); if (!curve) return
-    edit(() => { curve.keys = keysWithValue(curve, frame.value, value) })
+    if (workspace.activeLayerRef.value) {
+      actions.setValue({ ...workspace.activeLayerRef.value, kind: 'channel', channel }, value)
+    } else {
+      const l = selected.value; if (!l?.video || (l.flags & 32)) return
+      const curve = videoCurve(l.video, channel); if (!curve) return
+      edit(() => { curve.keys = keysWithValue(curve, frame.value, value) })
+    }
   }
   function restoreChannel(channel: EditableChannel) {
     const l = selected.value, current = doc.value
@@ -142,7 +253,8 @@ export function createEditor() {
     frame.value = project.view?.frame ?? scene.value?.start ?? 0; markSaved(); refresh()
   }
   return { closeDocument, operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
-    canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }) }
+    canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }),
+    workspace, actions }
 }
 export type Editor = ReturnType<typeof createEditor>
 export function download(bytes: Uint8Array, name: string) {
