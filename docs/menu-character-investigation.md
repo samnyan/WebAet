@@ -184,6 +184,10 @@ Original menu companions, composition 60 / layer 70752 / positionX: actual mouse
 
 Reproduced an actual post-refactor defect: positionX key drag 11→30 in composition 60, switching to composition 61 before release, then mouse-up still changed the old scene data (dirty=true/history created). Added a synchronous watch on document session/scene/composition identity to cancel pending timeline interactions. The existing start/end watcher was insufficient when two compositions shared ranges. Retest with original menu companions confirmed the same cross-composition release left the entire scene unchanged, dirty=false/no undo entry; a normal same-composition drag still committed frame 30. Type checking passed. Concurrent material-browser files remained untouched.
 
+## High-DPI scrolled timeline picking
+
+Original menu composition 60 / layer 70752, DPR 2, viewport 1600×1000: set zoom through the mounted Canvas public setZoom API to 20px/frame and native scroll container to offsets 28756/60. Actual mouse click on the positionX row selected exactly key frame 1488 and its full property reference. This checks combined zoom/scroll/DPR hit geometry; zoom and scrolling were programmatically positioned, not claimed as pointer-wheel coverage (separately checked earlier). Initial wheel-only harness attempts failed the viewport guard or selected no key because their assumed target was not reliably positioned; no implementation defect was established. No source change or temporary files were required.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
