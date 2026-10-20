@@ -11,6 +11,7 @@ import {
 import { canParent } from '../../../core/animation/parenting'
 import { canReferenceComposition } from '../../../core/animation/compositionReference'
 import KeyframeControls from './KeyframeControls.vue'
+import ParentPicker from './ParentPicker.vue'
 
 const props = defineProps<{
   editor: Editor
@@ -37,7 +38,7 @@ const currentValue = computed(() => {
 
 const isLocked = computed(() => {
   const l = ctx.value?.layer
-  return Boolean(l && (l.flags & 32))
+  return Boolean(l && l.flags & 32)
 })
 
 const isDisabled = computed(() => {
@@ -77,7 +78,12 @@ function cancelEdit() {
 
 function commitNumberEdit() {
   if (!isEditing.value) return
-  if (!isDisabled.value && propertyIdentity.value === capturedIdentity && e.value.version.value === capturedRevision && props.property.layerId === capturedLayerId) {
+  if (
+    !isDisabled.value &&
+    propertyIdentity.value === capturedIdentity &&
+    e.value.version.value === capturedRevision &&
+    props.property.layerId === capturedLayerId
+  ) {
     if (numberDraft.value !== null && numberDraft.value !== currentValue.value) {
       e.value.actions.setValue(props.property, numberDraft.value)
     }
@@ -87,7 +93,12 @@ function commitNumberEdit() {
 
 function commitTextEdit() {
   if (!isEditing.value) return
-  if (!isDisabled.value && propertyIdentity.value === capturedIdentity && e.value.version.value === capturedRevision && props.property.layerId === capturedLayerId) {
+  if (
+    !isDisabled.value &&
+    propertyIdentity.value === capturedIdentity &&
+    e.value.version.value === capturedRevision &&
+    props.property.layerId === capturedLayerId
+  ) {
     if (textDraft.value !== currentValue.value) {
       e.value.actions.setValue(props.property, textDraft.value)
     }
@@ -95,9 +106,18 @@ function commitTextEdit() {
   cancelEdit()
 }
 
-watch([() => e.value.version.value, propertyIdentity, () => e.value.workspace.activeLayerRef.value, () => e.value.busy.value], () => {
-  if (isEditing.value) cancelEdit()
-}, { flush: 'sync' })
+watch(
+  [
+    () => e.value.version.value,
+    propertyIdentity,
+    () => e.value.workspace.activeLayerRef.value,
+    () => e.value.busy.value,
+  ],
+  () => {
+    if (isEditing.value) cancelEdit()
+  },
+  { flush: 'sync' },
+)
 
 const matteOptions = [
   { value: 0, label: '无 / None' },
@@ -122,7 +142,7 @@ const parentOptions = computed(() => {
   if (!c || !l) return []
   return [
     { value: 0, label: '无 / None' },
-    ...c.layers.map(p => ({
+    ...c.layers.map((p) => ({
       value: p.offset,
       label: p.name,
       disabled: !canParent(c, l.offset, p.offset),
@@ -136,7 +156,10 @@ const compositionOptions = computed(() => {
   if (!scene || !parent) return []
   return scene.compositions.map((c, i) => ({
     value: c.offset,
-    label: `${i} · ${c.layers.slice(0, 2).map(l => l.name).join(', ')} · ${c.layers.length} layers`,
+    label: `${i} · ${c.layers
+      .slice(0, 2)
+      .map((l) => l.name)
+      .join(', ')} · ${c.layers.length} layers`,
     disabled: !canReferenceComposition(scene, parent.offset, c.offset),
   }))
 })
@@ -187,7 +210,11 @@ const selectOptions = computed(() => {
           :show-button="false"
           :step="descriptor.step ?? 1"
           @focus="startEdit"
-          @update:value="v => { if (isEditing) numberDraft = v }"
+          @update:value="
+            (v) => {
+              if (isEditing) numberDraft = v
+            }
+          "
           @blur="commitNumberEdit"
           @keydown.enter="commitNumberEdit"
           @keydown.esc="cancelEdit"
@@ -200,7 +227,11 @@ const selectOptions = computed(() => {
           :value="isEditing ? textDraft : (currentValue ?? '')"
           :disabled="isDisabled"
           @focus="startEdit"
-          @update:value="v => { if (isEditing) textDraft = v }"
+          @update:value="
+            (v) => {
+              if (isEditing) textDraft = v
+            }
+          "
           @blur="commitTextEdit"
           @keydown.enter="commitTextEdit"
           @keydown.esc="cancelEdit"
@@ -211,7 +242,7 @@ const selectOptions = computed(() => {
         <n-checkbox
           :checked="Boolean(currentValue)"
           :disabled="isDisabled"
-          @update:checked="v => e.actions.setValue(property, v)"
+          @update:checked="(v) => e.actions.setValue(property, v)"
         />
       </template>
 
@@ -222,7 +253,7 @@ const selectOptions = computed(() => {
           :value="currentValue"
           :options="selectOptions"
           :disabled="isDisabled"
-          @update:value="v => e.actions.setValue(property, v)"
+          @update:value="(v) => e.actions.setValue(property, v)"
         />
       </template>
 
@@ -231,15 +262,14 @@ const selectOptions = computed(() => {
       </template>
     </div>
 
-    <div
-      v-if="descriptor?.animated && property.kind === 'channel'"
-      class="row-keyframes"
-    >
-      <KeyframeControls
-        :editor="editor"
-        :property="property"
-        :compact="compact"
-      />
+    <ParentPicker
+      v-if="property.kind === 'layer' && property.field === 'parent'"
+      :editor="editor"
+      :property="property"
+      :disabled="isDisabled"
+    />
+    <div v-if="descriptor?.animated && property.kind === 'channel'" class="row-keyframes">
+      <KeyframeControls :editor="editor" :property="property" :compact="compact" />
     </div>
   </div>
 </template>
