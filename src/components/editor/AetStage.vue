@@ -7,6 +7,7 @@ import { translationGizmo, localTranslation } from '../../editor/translationGizm
 import { previewTranslation } from '../../editor/translationPreview'
 import { pointerAngle, angleDelta, rotationPreview } from '../../editor/rotationGizmo'
 import { sampleCurve } from '../../core/animation/curves'
+import { scalePreview } from '../../editor/scaleEditing'
 import { createSceneEvaluator } from '../../core/render/evaluate'
 import { createInstanceEvaluator } from '../../core/render/instances'
 import { renderSceneFrame } from '../../core/render/frame'
@@ -70,7 +71,8 @@ let resize: ResizeObserver,
   raf = 0
 let axisDrag: {
   id: number
-  axis: 'x' | 'y' | 'rotate'
+  axis: 'x' | 'y' | 'rotate' | 'scale'
+  factor?: number
   angle: number
   appliedAngle?: number
   lastAngle: number
@@ -222,8 +224,10 @@ function draw() {
       ? translationGizmo(e.composition.value, e.selectedId.value, e.frame.value)
       : null
   if (gizmoPoint) {
-    const x = gizmoPoint.x + (axisDrag?.axis === 'rotate' ? 0 : (axisDrag?.dx ?? 0)),
-      y = gizmoPoint.y + (axisDrag?.axis === 'rotate' ? 0 : (axisDrag?.dy ?? 0))
+    const x = gizmoPoint.x + (axisDrag?.linear ? 0 : (axisDrag?.dx ?? 0)),
+      y = gizmoPoint.y + (axisDrag?.linear ? 0 : (axisDrag?.dy ?? 0))
+    ctx.fillStyle = '#79c6ff'
+    ctx.fillRect(x + 46 / scale, y + 46 / scale, 9 / scale, 9 / scale)
     ctx.strokeStyle = '#d8b4fe'
     ctx.lineWidth = 1.5 / scale
     ctx.beginPath()
@@ -307,9 +311,11 @@ function pointerDown(event: PointerEvent) {
         ? 'x'
         : Math.abs(x) <= 7 && y <= -12 && y >= -60
           ? 'y'
-          : Math.abs(Math.hypot(x, y) - 68) <= 7
-            ? 'rotate'
-            : null
+          : Math.abs(x - 50) <= 9 && Math.abs(y - 50) <= 9
+            ? 'scale'
+            : Math.abs(Math.hypot(x, y) - 68) <= 7
+              ? 'rotate'
+              : null
     if (axis) {
       e.workspace.requestPause()
       canvas.value!.focus()
@@ -344,6 +350,20 @@ function pointerDown(event: PointerEvent) {
 }
 function pointerMove(event: PointerEvent) {
   if (axisDrag?.id === event.pointerId) {
+    if (axisDrag.axis === 'scale') {
+      const d = axisDrag
+      const factor = Math.max(
+        0.01,
+        Math.min(100, Math.exp((event.clientX - d.x - event.clientY + d.y) / 100)),
+      )
+      d.factor = factor
+      const preview = scalePreview(factor, d.pivot.x, d.pivot.y)
+      d.linear = preview.linear
+      d.dx = preview.dx
+      d.dy = preview.dy
+      schedule()
+      return
+    }
     if (axisDrag.axis === 'rotate') {
       const bounds = canvas.value!.getBoundingClientRect(),
         d = axisDrag
@@ -395,7 +415,9 @@ function pointerUp(event: PointerEvent) {
     const drag = axisDrag
     cancelAxis()
     if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) >= 3) {
-      if (drag.axis === 'rotate') {
+      if (drag.axis === 'scale') {
+        e.scaleLayer(drag.layer, drag.factor ?? 1)
+      } else if (drag.axis === 'rotate') {
         const raw = drag.initialRotation + drag.angle
         e.actions.setValue(
           {
