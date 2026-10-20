@@ -579,7 +579,7 @@ function handleLabelsWheel(e: WheelEvent) {
 }
 
 watch(
-  () => [p.editor.workspace.docSession.value, p.editor.sceneIndex.value, p.editor.compositionId.value],
+  () => [p.editor.workspace.docSession.value, p.editor.sceneIndex.value, p.editor.compositionId.value, p.editor.version.value],
   () => cancel(),
   { flush: 'sync' }
 )

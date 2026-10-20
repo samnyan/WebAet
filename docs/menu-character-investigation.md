@@ -188,6 +188,10 @@ Reproduced an actual post-refactor defect: positionX key drag 11→30 in composi
 
 Original menu composition 60 / layer 70752, DPR 2, viewport 1600×1000: set zoom through the mounted Canvas public setZoom API to 20px/frame and native scroll container to offsets 28756/60. Actual mouse click on the positionX row selected exactly key frame 1488 and its full property reference. This checks combined zoom/scroll/DPR hit geometry; zoom and scrolling were programmatically positioned, not claimed as pointer-wheel coverage (separately checked earlier). Initial wheel-only harness attempts failed the viewport guard or selected no key because their assumed target was not reliably positioned; no implementation defect was established. No source change or temporary files were required.
 
+## Revision invalidation during key dragging
+
+A separate real-menu check reproduced stale drag submission after undo replaced the document graph: start a key drag, undo a prior rename, release; the drag incorrectly dirtied the restored scene and created history. Included editor revision in the synchronous interaction-cancellation watcher. Retest preserved the complete original scene after undo/release, dirty=false/no undo entry, with redo history intact. A subsequent normal pointer drag still committed frame 30; type checking passed. This check imported the original AET only (no texture/raster claim). No concurrent material-browser files changed.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
