@@ -8,8 +8,8 @@ export class SpriteLibrary {
   readonly sets: SpriteSet[] = []
   private decodedBytes = 0
   readonly decodedBudget: number
-  constructor(decodedBudget = 128 * 1024 * 1024) {
-    if (!Number.isFinite(decodedBudget) || decodedBudget < 0) throw new Error('Invalid texture cache budget')
+  constructor(decodedBudget = Infinity) {
+    if (Number.isNaN(decodedBudget) || decodedBudget < 0) throw new Error('Invalid texture cache budget')
     this.decodedBudget = decodedBudget
   }
   get cacheStats() { return { textures: this.canvases.size, bytes: this.decodedBytes, budget: this.decodedBudget } }
@@ -52,16 +52,43 @@ export class SpriteLibrary {
   }
   sourceFor(setName: string, index: number) { return this.database.find(entry => entry.set.toLowerCase() === setName.split('/').at(-1)!.toLowerCase() && entry.index === index) }
   find(name: string, id?: number) { return (id === undefined ? undefined : this.ids.get(id)) ?? this.entries.get(name.toUpperCase()) }
-  image(texture: Texture) {
+  /** Prepare serially in one worker; no archive buffers are detached. */
+  async prepare(set: SpriteSet, signal?: AbortSignal) {
+    const worker = new Worker(new URL('./texture.worker.ts', import.meta.url), { type: 'module' })
+    const prepared: Texture[] = []
+    try {
+      for (const texture of set.textures) {
+        signal?.throwIfAborted()
+        if (this.canvases.has(texture)) continue
+        const pixels = await new Promise<Uint8ClampedArray<ArrayBuffer>>((resolve, reject) => {
+          const abort = () => { cleanup(); reject(signal!.reason) }
+          const cleanup = () => signal?.removeEventListener('abort', abort)
+          worker.onmessage = (event: MessageEvent<{ pixels?: Uint8ClampedArray<ArrayBuffer>; error?: string }>) => {
+            cleanup()
+            if (event.data.pixels) resolve(event.data.pixels)
+            else reject(new Error(event.data.error || 'Texture worker returned no pixels'))
+          }
+          worker.onerror = event => { event.preventDefault(); cleanup(); reject(new Error(event.message || 'Texture worker failed')) }
+          worker.onmessageerror = () => { cleanup(); reject(new Error('Texture worker transfer failed')) }
+          signal?.addEventListener('abort', abort, { once: true })
+          worker.postMessage({ ...texture, data: texture.data.slice(), chroma: texture.chroma ? { ...texture.chroma, data: texture.chroma.data.slice() } : undefined })
+        })
+        signal?.throwIfAborted()
+        this.image(texture, pixels); prepared.push(texture)
+      }
+    } catch (error) { for (const texture of prepared) this.release(texture); throw error }
+    finally { worker.terminate() }
+  }
+  image(texture: Texture, prepared?: Uint8ClampedArray<ArrayBuffer>) {
     let canvas = this.canvases.get(texture)
     if (canvas) { this.canvases.delete(texture); this.canvases.set(texture, canvas) }
     if (!canvas) {
       const bytes = texture.width * texture.height * 4
       // Decode before allocating a canvas or evicting usable cached images.
-      const decoded = decodeTexture(texture), pixels = new Uint8ClampedArray(decoded.length), stride = texture.width * 4
+      const decoded = prepared ? null : decodeTexture(texture), pixels = prepared ?? new Uint8ClampedArray(decoded!.length), stride = texture.width * 4
       canvas = document.createElement('canvas'); canvas.width = texture.width; canvas.height = texture.height
       // Sprite rectangles use a top-left atlas origin, unlike raw TXP rows.
-      for (let y = 0; y < texture.height; y++) pixels.set(decoded.subarray(y * stride, (y + 1) * stride), (texture.height - 1 - y) * stride)
+      if (decoded) for (let y = 0; y < texture.height; y++) pixels.set(decoded.subarray(y * stride, (y + 1) * stride), (texture.height - 1 - y) * stride)
       try {
         const ctx = canvas.getContext('2d')
         if (!ctx) throw new Error('Unable to create texture canvas context')

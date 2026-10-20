@@ -189,7 +189,7 @@ export function createEditor() {
           for (const [name, data] of entries) {
             if (/^aet_.*\.bin$/i.test(name) && !/^aet_db/i.test(name)) incoming.push({ name, bytes: data })
             else if (/^spr_db\.bin$/i.test(name)) { library.bindDatabase(parseSpriteDatabase(data)); resourceVersion.value++ }
-            else if (/^spr_.*\.bin$/i.test(name) && !/^spr_db/i.test(name)) { library.add(parseSpriteSet(data, name)); resourceVersion.value++ }
+            else if (/^spr_.*\.bin$/i.test(name) && !/^spr_db/i.test(name)) { const set = parseSpriteSet(data, name); await library.prepare(set, signal); library.add(set); resourceVersion.value++ }
           }
         } catch (e) { if (signal?.aborted) throw e; notices.value.push(`${file.name}: ${e}`) }
         await new Promise(resolve => setTimeout(resolve, 0))
