@@ -42,7 +42,7 @@ const visibleRows = computed(() => {
   const first = Math.max(0, Math.floor(props.scrollTop / TIMELINE_ROW_HEIGHT) - overscan)
   const last = Math.min(
     props.rows.length,
-    Math.ceil((props.scrollTop + props.viewportHeight) / TIMELINE_ROW_HEIGHT) + overscan
+    Math.ceil((props.scrollTop + props.viewportHeight) / TIMELINE_ROW_HEIGHT) + overscan,
   )
 
   const result: { row: TimelineRow; index: number; top: number }[] = []
@@ -116,7 +116,8 @@ function selectProperty(row: Extract<TimelineRow, { kind: 'property' }>, ev?: Mo
     prevProp &&
     prevProp.layerId === row.property.layerId &&
     prevProp.kind === row.property.kind &&
-    (prevProp.kind !== 'channel' || (row.property.kind === 'channel' && prevProp.channel === row.property.channel))
+    (prevProp.kind !== 'channel' ||
+      (row.property.kind === 'channel' && prevProp.channel === row.property.channel))
 
   if (!isSameProperty) {
     e.value.workspace.activeProperty.value = row.property
@@ -207,20 +208,37 @@ const dropdownOptions = computed<DropdownOption[]>(() => {
   }
 
   if (row.kind === 'layer') {
-    const index = e.value.composition.value?.layers.findIndex(l => l.offset === row.layer.layerId) ?? -1
+    const index =
+      e.value.composition.value?.layers.findIndex((l) => l.offset === row.layer.layerId) ?? -1
     const last = (e.value.composition.value?.layers.length ?? 0) - 1
     const blocked = row.locked || e.value.busy.value || index < 0
-    const groupBlocked = e.value.busy.value || e.value.workspace.selectedLayers.value.size < 2
-      || !e.value.workspace.selectedLayers.value.has(row.layer.layerId)
-      || !!e.value.composition.value?.layers.some(l => e.value.workspace.selectedLayers.value.has(l.offset) && (l.flags & 32))
+    const groupBlocked =
+      e.value.busy.value ||
+      e.value.workspace.selectedLayers.value.size < 2 ||
+      !e.value.workspace.selectedLayers.value.has(row.layer.layerId) ||
+      !!e.value.composition.value?.layers.some(
+        (l) => e.value.workspace.selectedLayers.value.has(l.offset) && l.flags & 32,
+      )
     const options: DropdownOption[] = [
-      { label: '选中图层排序', key: 'group-order', disabled: groupBlocked, children:
-        (['up', 'down', 'top', 'bottom'] as const).map((direction, i) => ({
-          label: `${['上移', '下移', '置顶', '置底'][i]}选中图层`, key: `group-${direction}`,
+      {
+        label: '选中图层排序',
+        key: 'group-order',
+        disabled: groupBlocked,
+        children: (['up', 'down', 'top', 'bottom'] as const).map((direction, i) => ({
+          label: `${['上移', '下移', '置顶', '置底'][i]}选中图层`,
+          key: `group-${direction}`,
         })),
       },
-      { label: `复制选中的 ${e.value.workspace.selectedLayers.value.size} 个图层`, key: 'copy-selection', disabled: groupBlocked },
-      { label: `删除选中的 ${e.value.workspace.selectedLayers.value.size} 个图层`, key: 'delete-selection', disabled: groupBlocked },
+      {
+        label: `复制选中的 ${e.value.workspace.selectedLayers.value.size} 个图层`,
+        key: 'copy-selection',
+        disabled: groupBlocked,
+      },
+      {
+        label: `删除选中的 ${e.value.workspace.selectedLayers.value.size} 个图层`,
+        key: 'delete-selection',
+        disabled: groupBlocked,
+      },
       { label: '复制图层（内容资源共享）', key: 'copy-layer', disabled: blocked },
       { label: '上移图层', key: 'move-up', disabled: blocked || index === 0 },
       { label: '下移图层', key: 'move-down', disabled: blocked || index === last },
@@ -228,7 +246,11 @@ const dropdownOptions = computed<DropdownOption[]>(() => {
       { label: '置底图层', key: 'move-bottom', disabled: blocked || index === last },
       { label: '在上方插入图层', key: 'insert-above', disabled: e.value.busy.value },
       { label: '在下方插入图层', key: 'insert-below', disabled: e.value.busy.value },
-      { label: '删除图层 / 子合成实例', key: 'delete-layer', disabled: row.locked || e.value.busy.value },
+      {
+        label: '删除图层 / 子合成实例',
+        key: 'delete-layer',
+        disabled: row.locked || e.value.busy.value,
+      },
       {
         label: row.locked ? '解锁图层' : '锁定图层',
         key: 'toggle-lock',
@@ -265,12 +287,22 @@ function handleDropdownSelect(key: string) {
       copyCurve(e.value, propRef)
     } else if (key === 'paste') {
       const copied = getCopiedCurve(e.value)
-      if (copied && window.confirm(`替换 ${propRef.channel} 曲线为剪贴板中的 ${copied.keys.length} 个关键帧？可撤销。`)) {
+      if (
+        copied &&
+        window.confirm(
+          `替换 ${propRef.channel} 曲线为剪贴板中的 ${copied.keys.length} 个关键帧？可撤销。`,
+        )
+      ) {
         pasteCurve(e.value, propRef)
       }
     } else if (key === 'constant') {
       const curve = resolveCurve(e.value, propRef)
-      if (curve && window.confirm(`将 ${propRef.channel} 的 ${curve.keys.length} 个关键帧替换为当前帧常量？可撤销。`)) {
+      if (
+        curve &&
+        window.confirm(
+          `将 ${propRef.channel} 的 ${curve.keys.length} 个关键帧替换为当前帧常量？可撤销。`,
+        )
+      ) {
         makeConstant(e.value, propRef)
       }
     } else if (key === 'restore') {
@@ -286,21 +318,40 @@ function handleDropdownSelect(key: string) {
     }
   } else if (row.kind === 'layer') {
     if (key === 'insert-above' || key === 'insert-below') {
-      const index = e.value.composition.value?.layers.findIndex(l => l.offset === row.layer.layerId) ?? -1
+      const index =
+        e.value.composition.value?.layers.findIndex((l) => l.offset === row.layer.layerId) ?? -1
       if (index >= 0) e.value.insertLayer(index + (key === 'insert-below' ? 1 : 0))
-    } else if (key === 'move-up' || key === 'move-down' || key === 'move-top' || key === 'move-bottom') {
+    } else if (
+      key === 'move-up' ||
+      key === 'move-down' ||
+      key === 'move-top' ||
+      key === 'move-bottom'
+    ) {
       const direction = key.slice(5) as 'up' | 'down' | 'top' | 'bottom'
       e.value.moveLayer(row.layer.layerId, direction)
     } else if (key === 'copy-layer') {
       e.value.copyLayer(row.layer.layerId)
-    } else if (key === 'group-up' || key === 'group-down' || key === 'group-top' || key === 'group-bottom') {
+    } else if (
+      key === 'group-up' ||
+      key === 'group-down' ||
+      key === 'group-top' ||
+      key === 'group-bottom'
+    ) {
       e.value.moveSelectedLayers(key.slice(6) as 'up' | 'down' | 'top' | 'bottom')
     } else if (key === 'copy-selection') {
       e.value.copySelectedLayers()
     } else if (key === 'delete-selection') {
-      if (window.confirm(`删除选中的 ${e.value.workspace.selectedLayers.value.size} 个图层？共享资源保留，依赖父级将解除。可撤销。`)) e.value.deleteSelectedLayers()
+      if (
+        window.confirm(
+          `删除选中的 ${e.value.workspace.selectedLayers.value.size} 个图层？共享资源保留，依赖父级将解除。可撤销。`,
+        )
+      )
+        e.value.deleteSelectedLayers()
     } else if (key === 'delete-layer') {
-      if (window.confirm('删除此图层实例？共享子合成资源保留；以它为父级的图层将解除父级。可撤销。')) e.value.deleteLayer(row.layer.layerId)
+      if (
+        window.confirm('删除此图层实例？共享子合成资源保留；以它为父级的图层将解除父级。可撤销。')
+      )
+        e.value.deleteLayer(row.layer.layerId)
     } else if (key === 'toggle-lock') {
       e.value.actions.setValue({ ...row.layer, kind: 'layer', field: 'locked' }, !row.locked)
     } else if (key === 'toggle-visible') {
@@ -346,12 +397,19 @@ function handleExpandAll() {
     @wheel="emit('wheel', $event)"
   >
     <!-- Ruler Header -->
-    <div
-      class="labels-header"
-      :style="{ height: `${TIMELINE_RULER_HEIGHT}px` }"
-    >
-      <button data-testid="timeline-back" :disabled="!e.workspace.navigation.value.length" title="返回上一级" @click="e.workspace.goBack()">←</button>
-      <span class="header-title">图层 / 属性 ({{ rows.length }}) · 已选 {{ e.workspace.selectedLayers.value.size }}</span>
+    <div class="labels-header" :style="{ height: `${TIMELINE_RULER_HEIGHT}px` }">
+      <button
+        class="hdr-btn"
+        data-testid="timeline-back"
+        :disabled="!e.workspace.navigation.value.length"
+        title="返回上一级"
+        @click="e.workspace.goBack()"
+      >
+        ←
+      </button>
+      <span class="header-title"
+        >图层 / 属性 ({{ rows.length }}) · 已选 {{ e.workspace.selectedLayers.value.size }}</span
+      >
       <div class="header-actions">
         <n-checkbox
           size="small"
@@ -361,22 +419,8 @@ function handleExpandAll() {
         >
           <span style="font-size: 11px">仅动画</span>
         </n-checkbox>
-        <button
-          type="button"
-          class="hdr-btn"
-          title="全部折叠"
-          @click="handleCollapseAll"
-        >
-          ▸
-        </button>
-        <button
-          type="button"
-          class="hdr-btn"
-          title="全部展开"
-          @click="handleExpandAll"
-        >
-          ▾
-        </button>
+        <button type="button" class="hdr-btn" title="全部折叠" @click="handleCollapseAll">▸</button>
+        <button type="button" class="hdr-btn" title="全部展开" @click="handleExpandAll">▾</button>
       </div>
     </div>
 
@@ -425,7 +469,11 @@ function handleExpandAll() {
               :title="item.row.visible ? '点击隐藏图层' : '点击显示图层'"
               @click="toggleLayerVisible(item.row, $event)"
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path v-if="!item.row.visible" d="m3 3 18 18"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+                <path v-if="!item.row.visible" d="m3 3 18 18" />
+              </svg>
             </button>
             <button
               type="button"
@@ -434,7 +482,10 @@ function handleExpandAll() {
               :title="item.row.locked ? '点击解锁图层' : '点击锁定图层'"
               @click="toggleLayerLocked(item.row, $event)"
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path :d="item.row.locked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="5" y="10" width="14" height="11" rx="2" />
+                <path :d="item.row.locked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'" />
+              </svg>
             </button>
 
             <!-- Layer Name -->
@@ -477,14 +528,23 @@ function handleExpandAll() {
             :style="{ paddingLeft: `${6 + item.row.depth * 14}px` }"
             @click="selectProperty(item.row, $event)"
           >
-            <PropertyEditorRow
-              :editor="editor"
-              :property="item.row.property"
-              compact
-            />
+            <PropertyEditorRow :editor="editor" :property="item.row.property" compact />
           </div>
         </template>
       </div>
+      <button
+        v-if="e.composition.value"
+        data-testid="new-layer"
+        class="new-layer-row"
+        :style="{
+          top: `${rows.length * TIMELINE_ROW_HEIGHT - scrollTop}px`,
+          height: `${TIMELINE_ROW_HEIGHT}px`,
+        }"
+        :disabled="e.busy.value"
+        @click="e.insertLayer()"
+      >
+        ＋ 新建独立图层
+      </button>
     </div>
 
     <!-- Dropdown context menu -->
@@ -502,6 +562,32 @@ function handleExpandAll() {
 </template>
 
 <style scoped>
+.new-layer-row {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  text-align: left;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: #ffffff05;
+  color: #83968f;
+  font-size: 11px;
+  cursor: pointer;
+}
+.new-layer-row:hover:not(:disabled),
+.new-layer-row:focus-visible {
+  background: #72c6b21a;
+  color: #72c6b2;
+}
+.new-layer-row:disabled,
+.hdr-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.hdr-btn:disabled:hover {
+  background: transparent;
+}
 .timeline-labels {
   position: absolute;
   left: 0;
@@ -630,9 +716,21 @@ function handleExpandAll() {
 .arrow-btn:hover {
   color: #fff;
 }
-.flag-btn svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.7; }
+.flag-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
 .flag-btn {
-  width:22px; height:22px; flex:0 0 22px; display:inline-flex; align-items:center; justify-content:center; border-radius:3px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
   background: none;
   border: none;
   cursor: pointer;
@@ -640,8 +738,9 @@ function handleExpandAll() {
   padding: 0 2px;
   color: #8b9baa;
 }
-.flag-btn:hover, .flag-btn:focus-visible {
-  background:#72c6b222;
+.flag-btn:hover,
+.flag-btn:focus-visible {
+  background: #72c6b222;
   color: #72c6b2;
 }
 .flag-btn.disabled {
