@@ -12,6 +12,7 @@ import { canParent } from '../../../core/animation/parenting'
 import { canReferenceComposition } from '../../../core/animation/compositionReference'
 import KeyframeControls from './KeyframeControls.vue'
 import ParentPicker from './ParentPicker.vue'
+import RotationDial from './RotationDial.vue'
 
 const props = defineProps<{
   editor: Editor
@@ -262,6 +263,12 @@ const selectOptions = computed(() => {
       </template>
     </div>
 
+    <RotationDial
+      v-if="property.kind === 'channel' && property.channel === 'rotation'"
+      :editor="editor"
+      :property="property"
+      :disabled="isDisabled"
+    />
     <ParentPicker
       v-if="property.kind === 'layer' && property.field === 'parent'"
       :editor="editor"
