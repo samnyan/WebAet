@@ -168,6 +168,10 @@ Added standalone `MenuCharacterPreview.vue` to the current Stage, reusing the ex
 
 Mounted original menu companions at scene 0 / ROOT 93 / frame 30. Actual select control switched rhythmgame/custom, yielding only the requested character path (104912/104960), with 73 draw items in each case after a deliberately unrelated layer was hidden. Actual Stage canvas pixels differed. The unrelated hidden layer survived both changes and reset to raw/all; scene JSON remained unchanged, dirty=false, no undo entry. Type checking passed. This restores usable character filtering after the UX migration; it is not whole-branch isolation or complete menu parity. Concurrent material-picker/resource-library work was not staged.
 
+## Timeline/Inspector actual-input synchronization
+
+At HEAD `471d1e8`, original menu companions, scene 0 / composition 60 / layer 70752, expanded Transform. Actual timeline position X input committed displayed value 1277→1287; Inspector immediately read 1287. Actual Inspector input then committed 1297; timeline immediately read 1297. Two actual undo button clicks restored both panels to 1287 then 1277, with dirty=false and error empty. Navigation/expansion used workspace APIs; both value edits used real input fill/Enter/blur. This verifies bidirectional displayed-property synchronization/history, not a specific sampled-frame interpolation result. No code change was needed, and concurrent material-picker files were untouched.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
