@@ -192,6 +192,10 @@ Original menu composition 60 / layer 70752, DPR 2, viewport 1600×1000: set zoom
 
 A separate real-menu check reproduced stale drag submission after undo replaced the document graph: start a key drag, undo a prior rename, release; the drag incorrectly dirtied the restored scene and created history. Included editor revision in the synchronous interaction-cancellation watcher. Retest preserved the complete original scene after undo/release, dirty=false/no undo entry, with redo history intact. A subsequent normal pointer drag still committed frame 30; type checking passed. This check imported the original AET only (no texture/raster claim). No concurrent material-browser files changed.
 
+## Real FARC resource-browser acceptance
+
+At HEAD `6f87342`, actual file input imported original `spr_nswgam_menu.farc`; Project tab → browser entry opened the shared ResourceBrowser. Archive package showed 83 Sprite entries and the real `spr_nswgam_menu.bin` directory (not invented name folders). At the sampled instant the virtual grid mounted 25 cells and 15 decoded 112×112 canvases, all with nontransparent pixels; remaining thumbnails were still deferred. Actual search showed no matches for an absent token, 8 matches for CHARA_MAINMENU_01, and restored entries after clearing. Actual directory click retained 83 entries; switching to the loaded-set package also showed 83 with no browser error. Initial harness role selectors did not match tab/input markup and were corrected; no implementation defect was established. This closes a scoped original-archive browse/search/folder/thumbnail-presence gap, not exact Sprite crop parity, all-grid completion, directory-handle authorization or worker texture decoding. Pages closed, no temporary artifacts.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
