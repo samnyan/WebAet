@@ -1,4 +1,6 @@
 import { computed, markRaw, ref, shallowRef, toRaw, triggerRef, watch } from 'vue'
+import { createIndependentLayer, removeLayer, reorderLayer, duplicateLayer, duplicateLayers, removeLayers, reorderedLayers, type LayerOrderDirection } from './layerEditing'
+import { movedLayers } from './layerTiming'
 import { parseAet } from '../core/aet/reader'
 import { writeAet } from '../core/aet/writer'
 import { videoCurve, type AetDocument, type EditableChannel, type Scene } from '../core/aet/types'
@@ -246,13 +248,86 @@ export function createEditor() {
     const source = Uint8Array.from(atob(project.source), c => c.charCodeAt(0))
     const draft = parseAet(source, project.name); draft.scenes = project.scenes
     const validated = parseAet(writeAet(draft), project.name)
-    open(source, project.name); doc.value!.scenes = validated.scenes
+    open(validated.source, project.name); doc.value!.scenes = validated.scenes
     // Normalize offsets against original source: appended curve data addresses are not structural IDs.
     selectScene(Math.max(0, Math.min(doc.value!.scenes.length - 1, project.view?.sceneIndex ?? 0)))
     if (scene.value?.compositions.some(c => c.offset === project.view?.compositionId)) compositionId.value = project.view.compositionId
     frame.value = project.view?.frame ?? scene.value?.start ?? 0; markSaved(); refresh()
   }
-  return { closeDocument, operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
+  function insertLayer(index = composition.value?.layers.length ?? 0) {
+    if (busy.value || !doc.value || !scene.value || !composition.value) return
+    const layer = createIndependentLayer(doc.value, scene.value.start, scene.value.end)
+    edit(() => composition.value!.layers.splice(index, 0, layer))
+    actions.selectLayer({ sceneIndex: sceneIndex.value, compositionId: compositionId.value, layerId: layer.offset })
+  }
+  function copyLayer(id: number) {
+    const c = composition.value
+    if (busy.value || !doc.value || !c) return
+    const index = c.layers.findIndex(l => l.offset === id)
+    if (index < 0 || (c.layers[index]!.flags & 32)) return
+    workspace.requestPause()
+    const copy = duplicateLayer(doc.value, c.layers[index]!)
+    edit(() => c.layers.splice(index, 0, copy))
+    actions.selectLayer({ sceneIndex: sceneIndex.value, compositionId: c.offset, layerId: copy.offset })
+  }
+  function moveLayer(id: number, direction: 'up' | 'down' | 'top' | 'bottom') {
+    const c = composition.value
+    if (busy.value || !c) return
+    const index = c.layers.findIndex(l => l.offset === id)
+    const target = direction === 'top' ? 0 : direction === 'bottom' ? c.layers.length - 1 : index + (direction === 'up' ? -1 : 1)
+    if (index < 0 || target < 0 || target >= c.layers.length || target === index || (c.layers[index]!.flags & 32)) return
+    workspace.requestPause()
+    edit(() => { reorderLayer(c, id, target) })
+  }
+  function moveSelectedLayers(direction: LayerOrderDirection) {
+    const c = composition.value
+    if (busy.value || !c) return
+    const next = reorderedLayers(c, workspace.selectedLayers.value, direction)
+    if (next.every((layer, index) => layer === c.layers[index])) return
+    workspace.requestPause()
+    edit(() => { c.layers = next })
+  }
+  function moveLayerGroup(ids: Set<number>, delta: number) {
+    if (busy.value || !composition.value) return
+    try {
+      const next = movedLayers(composition.value, ids, delta)
+      if (!next) return
+      workspace.requestPause()
+      edit(() => { composition.value!.layers = next })
+    } catch (cause) { error.value = String(cause) }
+  }
+  function copySelectedLayers() {
+    const c = composition.value, document = doc.value, ids = new Set(workspace.selectedLayers.value)
+    if (busy.value || !document || !c || !c.layers.some(l => ids.has(l.offset))) return
+    if (c.layers.some(l => ids.has(l.offset) && (l.flags & 32))) {
+      error.value = '选区包含锁定图层，请先解锁'
+      return
+    }
+    workspace.requestPause()
+    let copies: ReturnType<typeof duplicateLayers> = []
+    edit(() => { copies = duplicateLayers(document, c, ids) })
+    const primary = copies[0]
+    if (!primary) return
+    actions.selectLayer({ sceneIndex: sceneIndex.value, compositionId: c.offset, layerId: primary.offset })
+    workspace.selectedLayers.value = new Set(copies.map(l => l.offset))
+  }
+  function deleteSelectedLayers() {
+    const c = composition.value, ids = new Set(workspace.selectedLayers.value)
+    if (busy.value || !c || !c.layers.some(l => ids.has(l.offset))) return
+    if (c.layers.some(l => ids.has(l.offset) && (l.flags & 32))) {
+      error.value = '选区包含锁定图层，请先解锁'
+      return
+    }
+    workspace.requestPause()
+    edit(() => removeLayers(c, ids))
+    actions.selectLayer(null)
+  }
+  function deleteLayer(id: number) {
+    if (busy.value || !composition.value) return
+    edit(() => removeLayer(composition.value!, id))
+    actions.selectLayer(null)
+  }
+  return { moveLayerGroup, moveSelectedLayers, insertLayer, deleteLayer, deleteSelectedLayers, copySelectedLayers, moveLayer, copyLayer, closeDocument, operation, completedOperation, runOperation, doc, library, sceneIndex, compositionId, selectedId, frame, version, resourceVersion, busy, error, notices, hidden, dirty, scene, composition, selected, documents, open, importFiles, edit, refresh, undo, redo, selectScene, currentValue, setValue, restoreChannel, translateLayer, exportBinary, saveProject,
     canUndo: computed(() => { historyVersion.value; return undoStack.length > 0 }), canRedo: computed(() => { historyVersion.value; return redoStack.length > 0 }),
     workspace, actions }
 }

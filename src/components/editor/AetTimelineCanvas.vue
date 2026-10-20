@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { NDropdown } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import type { Keyframe } from '../../core/aet/types'
@@ -10,9 +10,11 @@ import {
   TIMELINE_MIN_LABELS_WIDTH,
   type TimelineRow,
 } from '../../editor/timelineRows'
+import { applyLayerTimeEdit, layerTimeDragDelta } from '../../editor/layerTiming'
 import type { KeyRef } from '../../editor/propertyActions'
 
 const p = defineProps<{
+  snap?: boolean
   editor: Editor
   rows: TimelineRow[]
   start: number
@@ -53,7 +55,7 @@ let observer: ResizeObserver
 
 let drag: {
   id: number
-  mode: 'pan' | 'seek' | 'key' | 'resize-labels'
+  mode: 'marquee' | 'pan' | 'seek' | 'key' | 'resize-labels' | 'trim-start' | 'trim-end' | 'layer-move'
   x: number
   y: number
   initialX: number
@@ -63,10 +65,15 @@ let drag: {
   anchor: number
   original: number
   target: number
+  marqueeBase?: KeyRef[]
+  keyGroup?: KeyRef[]
   keyRef?: KeyRef
+  groupDrag?: { id: number; start: number; end: number; timeOffset: number }[]
+  layerDrag?: { id: number; start: number; end: number; timeOffset: number }
   initialLabelsWidth?: number
 } | null = null
 
+function snapFrame(value: number) { return p.snap === false ? value : Math.round(value) }
 const span = () => Math.max(1, p.end - p.start)
 
 function lower(keys: readonly Keyframe[], time: number): number {
@@ -103,6 +110,7 @@ function schedule() {
 }
 
 function isKeySelected(prop: PropertyRef, frame: number): boolean {
+  if (p.editor.workspace.selectedKeys.value.some(k => k.property.layerId === prop.layerId && k.property.kind === prop.kind && prop.kind === 'channel' && k.property.channel === prop.channel && Math.fround(k.frame) === Math.fround(frame))) return true
   const ak = p.editor.workspace.activeKey.value
   if (!ak) return false
   if (ak.property.layerId !== prop.layerId || ak.property.kind !== prop.kind) return false
@@ -147,7 +155,7 @@ function draw() {
 
     // Row background
     const isLayerActive =
-      item.kind === 'layer' && p.editor.workspace.activeLayerRef.value?.layerId === item.layer.layerId
+      item.kind === 'layer' && p.editor.workspace.selectedLayers.value.has(item.layer.layerId)
     const isPropActive =
       item.kind === 'property' &&
       p.editor.workspace.activeProperty.value?.layerId === item.property.layerId &&
@@ -160,8 +168,12 @@ function draw() {
 
     // Layer time span bar
     if (item.kind === 'layer') {
-      const x1 = label + (item.start - p.start) * p.pixels - left
-      const x2 = label + (item.end - p.start) * p.pixels - left
+      const snapshot = drag?.groupDrag?.find(l => l.id === item.layer.layerId) ?? (drag?.layerDrag?.id === item.layer.layerId ? drag.layerDrag : null)
+      const preview = snapshot ? drag : null
+      const start = preview ? snapshot!.start + (preview.mode === 'trim-end' ? 0 : preview.target) : item.start
+      const end = preview ? snapshot!.end + (preview.mode === 'trim-start' ? 0 : preview.target) : item.end
+      const x1 = label + (start - p.start) * p.pixels - left
+      const x2 = label + (end - p.start) * p.pixels - left
       const barW = Math.max(3, x2 - x1)
 
       ctx.save()
@@ -191,6 +203,8 @@ function draw() {
       const curve = resolveCurve(p.editor, item.property)
       if (curve && curve.keys.length > 0) {
         const keys = curve.keys
+        const keyShift = (time: number) => drag?.mode === 'key' && drag.keyGroup?.some(k => k.property.layerId === item.property.layerId && item.property.kind === 'channel' && k.property.channel === item.property.channel && Math.fround(k.frame) === Math.fround(time)) ? drag.target - drag.original : 0
+        const groupShift = drag?.mode === 'layer-move' && drag.groupDrag?.some(l => l.id === item.property.layerId) ? drag.target : 0
         ctx.save()
         ctx.beginPath()
         ctx.rect(label, y, Math.max(0, width - label), row)
@@ -209,9 +223,9 @@ function draw() {
           painted++
         } else {
           // Animated keys with binary search and pixel column aggregation
-          let k = lower(keys, p.start + (left - 8) / p.pixels)
+          let k = lower(keys, p.start + (left - 8) / p.pixels - groupShift)
           let lastPixel = -Infinity
-          const viewEnd = p.start + (left + width - label + 8) / p.pixels
+          const viewEnd = p.start + (left + width - label + 8) / p.pixels - groupShift
 
           while (k < keys.length && keys[k]!.frame <= viewEnd) {
             const keyFrame = keys[k]!.frame
@@ -223,7 +237,7 @@ function draw() {
               Math.fround(drag.keyRef.frame) === Math.fround(keyFrame)
 
             const selected = isBeingDragged || isKeySelected(item.property, keyFrame)
-            const time = isBeingDragged ? drag!.target : keyFrame
+            const time = isBeingDragged ? drag!.target : keyFrame + groupShift + keyShift(keyFrame)
             const x = label + (time - p.start) * p.pixels - left
 
             if (Math.floor(x) !== lastPixel || selected) {
@@ -238,18 +252,20 @@ function draw() {
               ctx.closePath()
               ctx.fill()
             }
-            k = Math.max(k + 1, lower(keys, p.start + (Math.floor(x) + 1 - label + left) / p.pixels))
+            k = Math.max(k + 1, lower(keys, p.start + (Math.floor(label + (keyFrame + groupShift - p.start) * p.pixels - left) + 1 - label + left) / p.pixels - groupShift))
           }
 
           // Ensure active key is drawn even if pixel aggregation would skip it
-          const ak = p.editor.workspace.activeKey.value
-          if (
+          const highlighted = [...p.editor.workspace.selectedKeys.value]
+          const active = p.editor.workspace.activeKey.value
+          if (active) highlighted.push(active)
+          for (const ak of highlighted) if (
             ak &&
             ak.property.layerId === item.property.layerId &&
             ak.property.channel === item.property.channel
           ) {
-            const isBeingDragged = drag?.mode === 'key' && drag.keyRef && Math.fround(drag.keyRef.frame) === Math.fround(ak.frame)
-            const time = isBeingDragged ? drag!.target : ak.frame
+            const isBeingDragged = drag?.mode === 'key' && drag.keyRef && drag.keyRef.property.layerId === ak.property.layerId && drag.keyRef.property.channel === ak.property.channel && Math.fround(drag.keyRef.frame) === Math.fround(ak.frame)
+            const time = isBeingDragged ? drag!.target : ak.frame + groupShift + keyShift(ak.frame)
             const x = label + (time - p.start) * p.pixels - left
             ctx.fillStyle = '#ffdc83'
             ctx.beginPath()
@@ -266,6 +282,15 @@ function draw() {
       }
     }
 
+    ctx.restore()
+  }
+
+  if (drag?.mode === 'marquee') {
+    ctx.save()
+    ctx.beginPath(); ctx.rect(label, ruler, Math.max(0, width - label), Math.max(0, height - ruler)); ctx.clip()
+    const x = drag.initialX + drag.left - left, y = drag.initialY + drag.top - top
+    ctx.fillStyle = '#72c6b222'; ctx.strokeStyle = '#72c6b2'
+    ctx.fillRect(x, y, drag.x - x, drag.y - y); ctx.strokeRect(x, y, drag.x - x, drag.y - y)
     ctx.restore()
   }
 
@@ -320,16 +345,32 @@ function contextMenu(event: MouseEvent) {
   const key = [curve.keys[i - 1], curve.keys[i]].filter((k): k is Keyframe => !!k).sort((a, b) => Math.abs(a.frame - time) - Math.abs(b.frame - time))[0]
   if (!key || Math.abs(key.frame - time) * p.pixels > 8) return
   p.editor.workspace.requestPause()
-  p.editor.actions.selectLayer(item.property)
   const keyRef: KeyRef = { property: item.property, frame: key.frame }
-  p.editor.actions.selectKey(keyRef)
+  if (!isKeySelected(item.property, key.frame)) {
+    p.editor.actions.selectLayer(item.property)
+    p.editor.actions.selectKey(keyRef)
+  }
   const layer = p.editor.composition.value?.layers.find(l => l.offset === item.property.layerId)
   keyMenu.value = { x: event.clientX, y: event.clientY, key: keyRef, locked: !!(layer && (layer.flags & 32)) }
+}
+function keyClipboard(event: KeyboardEvent) {
+  if (p.disabled || !(event.ctrlKey || event.metaKey) || !['c', 'v'].includes(event.key.toLowerCase())) return
+  event.preventDefault(); event.stopPropagation()
+  if (event.key.toLowerCase() === 'c') p.editor.actions.copySelectedKeys()
+  else p.editor.actions.pasteSelectedKeys()
+}
+function keyMenuSelect(key: string) {
+  if (key === 'copy') { p.editor.actions.copySelectedKeys(); keyMenu.value = null }
+  else if (key === 'paste') { p.editor.actions.pasteSelectedKeys(); keyMenu.value = null }
+  else deleteContextKey()
 }
 function deleteContextKey() {
   const menu = keyMenu.value
   keyMenu.value = null
-  if (menu && !menu.locked) p.editor.actions.removeKey(menu.key)
+  if (menu && !menu.locked) {
+    if (p.editor.workspace.selectedKeys.value.length > 1) p.editor.actions.removeSelectedKeys()
+    else p.editor.actions.removeKey(menu.key)
+  }
 }
 
 function flushSeek() {
@@ -343,7 +384,7 @@ function flushSeek() {
 }
 
 function seek(value: number) {
-  pending = Math.max(p.start, Math.min(p.end, value))
+  pending = Math.max(p.start, Math.min(p.end, snapFrame(value)))
   positionHead()
   if (!input) input = requestAnimationFrame(flushSeek)
 }
@@ -412,10 +453,7 @@ function down(e: PointerEvent) {
 
   const rowIndex = Math.floor((pos.y - ruler + top) / row)
   const item = p.rows[rowIndex]
-  if (!item) {
-    seek(at(pos.x))
-    return
-  }
+  if (!item) { drag = null; return }
 
   if (item.kind === 'property' && item.property.kind === 'channel') {
     const curve = resolveCurve(p.editor, item.property)
@@ -430,8 +468,15 @@ function down(e: PointerEvent) {
 
       if (nearest !== undefined && Math.abs(keys[nearest]!.frame - clickTime) * p.pixels <= 8) {
         const hitKey = keys[nearest]!
-        p.editor.actions.selectLayer(item.property)
-        p.editor.actions.selectKey({ property: item.property, frame: hitKey.frame })
+        if (e.ctrlKey || e.metaKey) {
+          p.editor.actions.toggleKey({ property: item.property, frame: hitKey.frame })
+          drag = null; schedule(); return
+        }
+        const inGroup = isKeySelected(item.property, hitKey.frame) && p.editor.workspace.selectedKeys.value.length > 1
+        if (!inGroup) {
+          p.editor.actions.selectLayer(item.property)
+          p.editor.actions.selectKey({ property: item.property, frame: hitKey.frame })
+        }
 
         const layer = p.rows.find(r => r.kind === 'layer' && r.layer.layerId === item.property.layerId) as
           | Extract<TimelineRow, { kind: 'layer' }>
@@ -439,6 +484,7 @@ function down(e: PointerEvent) {
 
         if (keys.length > 1 && !layer?.locked) {
           drag.mode = 'key'
+          if (inGroup) drag.keyGroup = [...p.editor.workspace.selectedKeys.value]
           drag.keyRef = { property: item.property, frame: hitKey.frame }
           drag.original = hitKey.frame
           drag.target = hitKey.frame
@@ -449,25 +495,47 @@ function down(e: PointerEvent) {
         return
       }
     }
-    p.editor.actions.selectLayer(item.property)
-    p.editor.workspace.activeProperty.value = item.property
-    seek(at(pos.x))
+    drag.mode = 'marquee'
+    drag.marqueeBase = e.ctrlKey || e.metaKey ? [...p.editor.workspace.selectedKeys.value] : []
+    p.editor.workspace.requestPause()
+    schedule()
     return
   }
 
   if (item.kind === 'layer') {
-    p.editor.actions.selectLayer(item.layer)
-    seek(at(pos.x))
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      p.editor.workspace.selectLayerGroup(item.layer, e.shiftKey ? 'range' : 'toggle')
+      drag = null; schedule(); return
+    }
+    if (!p.editor.workspace.selectedLayers.value.has(item.layer.layerId)) p.editor.actions.selectLayer(item.layer)
+    const frame = at(pos.x)
+    if (item.locked || frame < item.start - 6 / p.pixels || frame > item.end + 6 / p.pixels) { drag = null; return }
+    drag.mode = Math.abs(frame - item.start) * p.pixels <= 6 ? 'trim-start' : Math.abs(frame - item.end) * p.pixels <= 6 ? 'trim-end' : 'layer-move'
+    const layer = p.editor.composition.value!.layers.find(l => l.offset === item.layer.layerId)!
+    drag.layerDrag = { id: layer.offset, start: layer.start, end: layer.end, timeOffset: layer.timeOffset }
+    if (drag.mode === 'layer-move') {
+      const members = p.editor.composition.value!.layers.filter(l => p.editor.workspace.selectedLayers.value.has(l.offset))
+      if (members.some(l => l.flags & 32)) { drag = null; return }
+      drag.groupDrag = members.map(l => ({ id: l.offset, start: l.start, end: l.end, timeOffset: l.timeOffset }))
+    }
+    p.editor.workspace.requestPause()
+    schedule()
     return
   }
 
-  seek(at(pos.x))
+  drag = null
 }
 
 function updateDrag() {
   if (!drag || drag.mode === 'pan' || drag.mode === 'resize-labels') return
-  if (drag.mode === 'key') {
-    drag.target = Math.round(drag.original + at(drag.x) - drag.anchor)
+  if (drag.mode === 'marquee') { schedule(); return }
+  if (drag.layerDrag) {
+    if (drag.mode === 'trim-start' || drag.mode === 'trim-end' || drag.mode === 'layer-move') {
+      drag.target = layerTimeDragDelta(drag.layerDrag, drag.mode, at(drag.x) - drag.anchor, p.snap !== false)
+    }
+    schedule()
+  } else if (drag.mode === 'key') {
+    drag.target = snapFrame(drag.original + at(drag.x) - drag.anchor)
     schedule()
   } else {
     seek(at(drag.x))
@@ -484,11 +552,21 @@ function autoScroll() {
       : drag.x < label + 24
       ? -Math.min(24, (label + 24 - drag.x) / 3)
       : 0
-  if (speed && scroll.value) {
+  const vertical = drag.mode === 'marquee'
+    ? drag.y > height - 24
+      ? Math.min(24, (drag.y - height + 24) / 3)
+      : drag.y < ruler + 24
+      ? -Math.min(24, (ruler + 24 - drag.y) / 3)
+      : 0
+    : 0
+  if ((speed || vertical) && scroll.value) {
+    const previousLeft = scroll.value.scrollLeft, previousTop = scroll.value.scrollTop
     scroll.value.scrollLeft += speed
+    scroll.value.scrollTop += vertical
     sync()
     updateDrag()
-    edge = requestAnimationFrame(autoScroll)
+    // Stop at native scroll bounds rather than spinning RAF indefinitely.
+    if (left !== previousLeft || top !== previousTop) edge = requestAnimationFrame(autoScroll)
   }
 }
 
@@ -528,13 +606,41 @@ function up(e: PointerEvent) {
   edge = 0
   flushSeek()
 
+  if (d.mode === 'marquee' && !p.disabled) {
+    const keys = [...(d.marqueeBase ?? [])]
+    const x1 = Math.min(d.anchor, at(d.x)), x2 = Math.max(d.anchor, at(d.x))
+    const y1 = Math.min(d.initialY + d.top, d.y + top), y2 = Math.max(d.initialY + d.top, d.y + top)
+    for (const [index, item] of p.rows.entries()) {
+      const center = ruler + index * row + row / 2
+      if (center < y1 || center > y2 || item.kind !== 'property' || item.property.kind !== 'channel') continue
+      const curve = resolveCurve(p.editor, item.property)
+      if (!curve) continue
+      for (let i = lower(curve.keys, x1); i < curve.keys.length && curve.keys[i]!.frame <= x2; i++) keys.push({ property: item.property, frame: curve.keys[i]!.frame })
+    }
+    if (Math.abs(d.x + left - d.initialX - d.left) <= 3 && Math.abs(d.y + top - d.initialY - d.top) <= 3) {
+      const item = p.rows[Math.floor((d.y - ruler + top) / row)]
+      if (item?.kind === 'property') {
+        p.editor.actions.selectLayer(item.property)
+        p.editor.workspace.activeProperty.value = item.property
+      }
+    } else p.editor.actions.selectKeys(keys)
+  }
+  if (d.layerDrag && d.target && Math.abs(d.x - d.initialX) > 3 && !p.disabled) {
+    const original = d.layerDrag, layer = p.editor.composition.value?.layers.find(l => l.offset === original.id)
+    if (layer && !(layer.flags & 32) && (d.mode === 'trim-start' || d.mode === 'trim-end' || d.mode === 'layer-move')) {
+      const mode = d.mode
+      if (mode === 'layer-move' && d.groupDrag) p.editor.moveLayerGroup(new Set(d.groupDrag.map(l => l.id)), d.target)
+      else p.editor.edit(() => applyLayerTimeEdit(layer, original, mode, d.target))
+    }
+  }
   if (
     d.mode === 'key' &&
     d.keyRef &&
     !p.disabled &&
     (Math.abs(d.x - d.initialX) > 3 || d.target !== d.original)
   ) {
-    p.editor.actions.moveKey(d.keyRef, d.target)
+    if (d.keyGroup) p.editor.actions.moveSelectedKeys(d.target - d.original)
+    else p.editor.actions.moveKey(d.keyRef, d.target)
   }
 
   if (canvas.value?.hasPointerCapture(e.pointerId)) {
@@ -608,6 +714,22 @@ function handleLabelsWheel(e: WheelEvent) {
   }
 }
 
+// View-only state: never serialized into AET or history snapshots.
+const compositionScroll = new Map<string, { left: number; top: number }>()
+const viewportKey = () => `${p.editor.workspace.docSession.value}:${p.editor.sceneIndex.value}:${p.editor.compositionId.value}`
+watch(viewportKey, async (key, previous, onCleanup) => {
+  compositionScroll.set(previous, { left, top })
+  let stale = false
+  onCleanup(() => { stale = true })
+  await nextTick()
+  if (stale || !scroll.value) return
+  const saved = compositionScroll.get(key)
+  scroll.value.scrollLeft = saved?.left ?? 0
+  scroll.value.scrollTop = saved?.top ?? 0
+  sync()
+}, { flush: 'sync' })
+watch(() => p.editor.workspace.docSession.value, () => compositionScroll.clear(), { flush: 'sync' })
+
 watch(
   () => [p.editor.workspace.docSession.value, p.editor.sceneIndex.value, p.editor.compositionId.value, p.editor.version.value],
   () => cancel(),
@@ -629,7 +751,7 @@ watch(
 )
 
 watch(
-  () => [p.rows, p.revision, p.pixels, p.labelsWidth, p.editor.workspace.activeLayerRef.value, p.editor.workspace.activeProperty.value, p.editor.workspace.activeKey.value],
+  () => [p.rows, p.revision, p.editor.workspace.selectedKeys.value, p.editor.workspace.selectedLayers.value, p.pixels, p.labelsWidth, p.editor.workspace.activeLayerRef.value, p.editor.workspace.activeProperty.value, p.editor.workspace.activeKey.value],
   () => {
     schedule()
     positionHead()
@@ -688,11 +810,13 @@ defineExpose({ fit, setZoom, handleLabelsWheel })
       @pointermove="move"
       @pointerup="up"
       @pointercancel="cancel"
+      @keydown="keyClipboard"
+      @keydown.esc.stop.prevent="cancel()"
       @lostpointercapture="cancel"
       @wheel="wheel"
     />
 
-    <n-dropdown v-if="keyMenu" trigger="manual" :show="true" :x="keyMenu.x" :y="keyMenu.y" :options="[{ key: 'delete', label: '删除关键帧', disabled: keyMenu.locked || disabled }]" @select="deleteContextKey" @clickoutside="keyMenu = null" @esc="keyMenu = null" />
+    <n-dropdown v-if="keyMenu" trigger="manual" :show="true" :x="keyMenu.x" :y="keyMenu.y" :options="[{ key: 'copy', label: '复制选中关键帧' }, { key: 'paste', label: '粘贴到播放头（原轨道）', disabled }, { key: 'delete', label: editor.workspace.selectedKeys.value.length > 1 ? `删除选中的 ${editor.workspace.selectedKeys.value.length} 个关键帧` : '删除关键帧', disabled: keyMenu.locked || disabled }]" @select="keyMenuSelect" @clickoutside="keyMenu = null" @esc="keyMenu = null" />
     <div ref="playhead" class="aet-timeline-playhead" />
 
     <!-- Resizer bar between labels and canvas -->

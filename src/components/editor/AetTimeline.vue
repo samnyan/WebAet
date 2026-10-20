@@ -97,6 +97,7 @@ watch(segmentId, () => {
   e.frame.value = range.value.start
 })
 
+const snap = ref(true)
 const followPlayhead = ref(false)
 const viewport = ref<InstanceType<typeof AetTimelineCanvas>>()
 
@@ -133,7 +134,7 @@ watch(
   () => {
     stop()
     e.workspace.activeKey.value = null
-    e.frame.value = range.value.start
+    // Composition navigation owns the destination playhead (including Back).
   }
 )
 
@@ -258,10 +259,10 @@ function onLabelsWheel(ev: WheelEvent) {
   viewport.value?.handleLabelsWheel(ev)
 }
 
-function resize(event: PointerEvent) {
 function resetTimelineLayout() { height.value = 260 }
 onMounted(() => window.addEventListener('webaet:reset-layout', resetTimelineLayout))
 onBeforeUnmount(() => window.removeEventListener('webaet:reset-layout', resetTimelineLayout))
+function resize(event: PointerEvent) {
   const y = event.clientY
   const h = height.value
   const move = (ev: PointerEvent) => {
@@ -345,6 +346,7 @@ onBeforeUnmount(() => {
           @update:value="v => v !== null && scrub(v)"
         />
         <span>f</span>
+        <n-checkbox v-model:checked="snap" size="small">帧吸附</n-checkbox>
         <n-checkbox v-model:checked="repeat" size="small">循环</n-checkbox>
         <n-select
           data-testid="playback-speed"
@@ -397,6 +399,7 @@ onBeforeUnmount(() => {
         />
         <AetTimelineCanvas
           ref="viewport"
+          :snap="snap"
           :editor="e"
           :rows="rows"
           :start="range.start"
@@ -415,6 +418,7 @@ onBeforeUnmount(() => {
         />
       </div>
 
+      <div style="padding: 6px 10px"><n-button data-testid="new-layer" size="tiny" :disabled="!e.composition.value || e.busy.value" @click="e.insertLayer()">＋ 新建独立图层</n-button></div>
       <CurvePreview
         v-if="showCurve"
         :curve="activeCurve"

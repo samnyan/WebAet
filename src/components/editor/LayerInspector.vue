@@ -6,6 +6,7 @@ import { listLayerProperties, type PropertyGroupId } from '../../editor/properti
 import type { PreviewTarget } from '../../editor/workspaceAssets'
 import SceneInspector from './SceneInspector.vue'
 import PropertyEditorRow from './properties/PropertyEditorRow.vue'
+import LayerReferenceSelect from './LayerReferenceSelect.vue'
 import AssetPreview from './AssetPreview.vue'
 const { editor: e } = defineProps<{ editor: Editor }>()
 const showMaterialPicker = ref(false)
@@ -44,10 +45,11 @@ const toggle = (id: string) => e.workspace.toggleExpanded(`closed:${id}`, 'inspe
     <template v-else-if="layer">
       <div class="sticky-layer"><input v-if="renaming" ref="nameInput" v-model="nameDraft" aria-label="图层名称" @blur="commitName" @keydown.enter.prevent="commitName" @keydown.esc.prevent="renaming = false" /><strong v-else :title="`${layer.name} · 双击重命名 · 0x${layer.offset.toString(16)}`" tabindex="0" @dblclick="rename" @keydown.f2.prevent="rename">{{ layer.name }} <small>{{ layer.itemType === 3 ? 'Comp' : 'Layer' }}</small></strong></div>
       <div class="inspector-scroll">
+        <LayerReferenceSelect :editor="e" />
         <section v-for="group in groups.filter(g => inGroup(g.id).length)" :key="group.id" class="inspector-group"><button class="group-heading" :aria-expanded="expanded(group.id)" @click="toggle(group.id)">{{ expanded(group.id) ? '▾' : '▸' }} {{ group.label }}</button>
           <div v-if="expanded(group.id)">
             <PropertyEditorRow v-for="p in inGroup(group.id)" :key="p.id" :editor="e" :property="p.property" />
-            <template v-if="group.id === 'source'"><button v-if="layer.itemType === 1" data-testid="browse-material" class="group-heading" :disabled="e.busy.value || !!(layer.flags & 32)" @click="showMaterialPicker = true">浏览并选择贴图…</button><AssetPreview :editor="e" :target="preview" /><button v-if="layer.itemType === 3" class="group-heading" @click="e.actions.openComposition(e.sceneIndex.value, layer.item)">进入合成 ↳</button><details v-if="sourceDetails.length"><summary>Sprite 引用（{{ sourceDetails.length }}）</summary><div class="source-list"><p v-for="source in sourceDetails.slice(0, 100)" :key="source.index">{{ source.index }} · {{ source.name }} · ID {{ source.id }} · {{ source.resolved ? '已解析' : '未解析' }}</p><small v-if="sourceDetails.length > 100">仅显示前 100 项</small></div></details><p class="muted">替换引用保留本地变换和动画，不保持原布局。</p></template>
+            <template v-if="group.id === 'source'"><button v-if="layer.itemType === 1" data-testid="browse-material" class="group-heading" :disabled="e.busy.value || !!(layer.flags & 32)" @click="showMaterialPicker = true">浏览并选择贴图…</button><AssetPreview :editor="e" :target="preview" /><button v-if="layer.itemType === 3" class="group-heading" @click="e.workspace.activeLayerRef.value && e.actions.enterComposition(e.workspace.activeLayerRef.value)">进入合成 ↳</button><details v-if="sourceDetails.length"><summary>Sprite 引用（{{ sourceDetails.length }}）</summary><div class="source-list"><p v-for="source in sourceDetails.slice(0, 100)" :key="source.index">{{ source.index }} · {{ source.name }} · ID {{ source.id }} · {{ source.resolved ? '已解析' : '未解析' }}</p><small v-if="sourceDetails.length > 100">仅显示前 100 项</small></div></details><p class="muted">替换引用保留本地变换和动画，不保持原布局。</p></template>
             <template v-if="group.id === 'transform' && inGroup('transform3d').length"><button class="group-heading nested" :aria-expanded="expanded('transform3d')" @click="toggle('transform3d')">{{ expanded('transform3d') ? '▾' : '▸' }} 3D 变换</button><div v-if="expanded('transform3d')"><PropertyEditorRow v-for="p in inGroup('transform3d')" :key="p.id" :editor="e" :property="p.property" /><p class="warning">3D 曲线可编辑导出；预览尚不包含完整游戏相机透视。</p></div></template>
             <p v-if="group.id === 'layer'" class="muted">可见开关写入资源；左侧眼睛只控制预览。切换父级保留本地变换。</p>
             <p v-if="group.id === 'appearance' && layer.video?.matte" class="warning">遮罩按递归倒序精灵配对；亮度色彩空间未验证游戏一致性。</p>

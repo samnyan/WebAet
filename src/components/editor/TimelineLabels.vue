@@ -74,20 +74,17 @@ function selectLayer(row: Extract<TimelineRow, { kind: 'layer' }>, ev?: MouseEve
     if (target?.closest('button, input, textarea, select, .action-btn')) return
   }
   ev?.stopPropagation()
-  const currentLayer = e.value.workspace.activeLayerRef.value
-  const isSameLayer =
-    currentLayer?.sceneIndex === row.layer.sceneIndex &&
-    currentLayer?.compositionId === row.layer.compositionId &&
-    currentLayer?.layerId === row.layer.layerId
-
-  if (!isSameLayer || e.value.workspace.activeProperty.value !== null) {
-    e.value.actions.selectLayer(row.layer)
+  if (ev?.ctrlKey || ev?.metaKey || ev?.shiftKey) {
+    e.value.workspace.selectLayerGroup(row.layer, ev.shiftKey ? 'range' : 'toggle')
+    return
   }
+  // A plain label click resets both the group and range anchor, even on the primary.
+  e.value.actions.selectLayer(row.layer)
 }
 
 function onLayerDblClick(row: Extract<TimelineRow, { kind: 'layer' }>) {
   if (row.itemType === 3 && row.item !== undefined) {
-    e.value.actions.openComposition(row.layer.sceneIndex, row.item)
+    e.value.actions.enterComposition(row.layer)
   }
 }
 
@@ -129,7 +126,7 @@ function selectProperty(row: Extract<TimelineRow, { kind: 'property' }>, ev?: Mo
 
 function isRowSelected(row: TimelineRow): boolean {
   if (row.kind === 'layer') {
-    return e.value.workspace.activeLayerRef.value?.layerId === row.layer.layerId
+    return e.value.workspace.selectedLayers.value.has(row.layer.layerId)
   }
   if (row.kind === 'property') {
     const active = e.value.workspace.activeProperty.value
@@ -210,7 +207,28 @@ const dropdownOptions = computed<DropdownOption[]>(() => {
   }
 
   if (row.kind === 'layer') {
+    const index = e.value.composition.value?.layers.findIndex(l => l.offset === row.layer.layerId) ?? -1
+    const last = (e.value.composition.value?.layers.length ?? 0) - 1
+    const blocked = row.locked || e.value.busy.value || index < 0
+    const groupBlocked = e.value.busy.value || e.value.workspace.selectedLayers.value.size < 2
+      || !e.value.workspace.selectedLayers.value.has(row.layer.layerId)
+      || !!e.value.composition.value?.layers.some(l => e.value.workspace.selectedLayers.value.has(l.offset) && (l.flags & 32))
     const options: DropdownOption[] = [
+      { label: '选中图层排序', key: 'group-order', disabled: groupBlocked, children:
+        (['up', 'down', 'top', 'bottom'] as const).map((direction, i) => ({
+          label: `${['上移', '下移', '置顶', '置底'][i]}选中图层`, key: `group-${direction}`,
+        })),
+      },
+      { label: `复制选中的 ${e.value.workspace.selectedLayers.value.size} 个图层`, key: 'copy-selection', disabled: groupBlocked },
+      { label: `删除选中的 ${e.value.workspace.selectedLayers.value.size} 个图层`, key: 'delete-selection', disabled: groupBlocked },
+      { label: '复制图层（内容资源共享）', key: 'copy-layer', disabled: blocked },
+      { label: '上移图层', key: 'move-up', disabled: blocked || index === 0 },
+      { label: '下移图层', key: 'move-down', disabled: blocked || index === last },
+      { label: '置顶图层', key: 'move-top', disabled: blocked || index === 0 },
+      { label: '置底图层', key: 'move-bottom', disabled: blocked || index === last },
+      { label: '在上方插入图层', key: 'insert-above', disabled: e.value.busy.value },
+      { label: '在下方插入图层', key: 'insert-below', disabled: e.value.busy.value },
+      { label: '删除图层 / 子合成实例', key: 'delete-layer', disabled: row.locked || e.value.busy.value },
       {
         label: row.locked ? '解锁图层' : '锁定图层',
         key: 'toggle-lock',
@@ -267,12 +285,28 @@ function handleDropdownSelect(key: string) {
       emit('openTools')
     }
   } else if (row.kind === 'layer') {
-    if (key === 'toggle-lock') {
+    if (key === 'insert-above' || key === 'insert-below') {
+      const index = e.value.composition.value?.layers.findIndex(l => l.offset === row.layer.layerId) ?? -1
+      if (index >= 0) e.value.insertLayer(index + (key === 'insert-below' ? 1 : 0))
+    } else if (key === 'move-up' || key === 'move-down' || key === 'move-top' || key === 'move-bottom') {
+      const direction = key.slice(5) as 'up' | 'down' | 'top' | 'bottom'
+      e.value.moveLayer(row.layer.layerId, direction)
+    } else if (key === 'copy-layer') {
+      e.value.copyLayer(row.layer.layerId)
+    } else if (key === 'group-up' || key === 'group-down' || key === 'group-top' || key === 'group-bottom') {
+      e.value.moveSelectedLayers(key.slice(6) as 'up' | 'down' | 'top' | 'bottom')
+    } else if (key === 'copy-selection') {
+      e.value.copySelectedLayers()
+    } else if (key === 'delete-selection') {
+      if (window.confirm(`删除选中的 ${e.value.workspace.selectedLayers.value.size} 个图层？共享资源保留，依赖父级将解除。可撤销。`)) e.value.deleteSelectedLayers()
+    } else if (key === 'delete-layer') {
+      if (window.confirm('删除此图层实例？共享子合成资源保留；以它为父级的图层将解除父级。可撤销。')) e.value.deleteLayer(row.layer.layerId)
+    } else if (key === 'toggle-lock') {
       e.value.actions.setValue({ ...row.layer, kind: 'layer', field: 'locked' }, !row.locked)
     } else if (key === 'toggle-visible') {
       e.value.actions.setValue({ ...row.layer, kind: 'layer', field: 'visible' }, !row.visible)
     } else if (key === 'open-comp' && row.itemType === 3 && row.item !== undefined) {
-      e.value.actions.openComposition(row.layer.sceneIndex, row.item)
+      e.value.actions.enterComposition(row.layer)
     } else if (key === 'tools') {
       e.value.workspace.selectLayer(row.layer)
       emit('openTools')
@@ -316,7 +350,8 @@ function handleExpandAll() {
       class="labels-header"
       :style="{ height: `${TIMELINE_RULER_HEIGHT}px` }"
     >
-      <span class="header-title">图层 / 属性 ({{ rows.length }})</span>
+      <button data-testid="timeline-back" :disabled="!e.workspace.navigation.value.length" title="返回上一级" @click="e.workspace.goBack()">←</button>
+      <span class="header-title">图层 / 属性 ({{ rows.length }}) · 已选 {{ e.workspace.selectedLayers.value.size }}</span>
       <div class="header-actions">
         <n-checkbox
           size="small"

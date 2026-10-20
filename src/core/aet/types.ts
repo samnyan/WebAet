@@ -13,6 +13,8 @@ export interface LayerVideo {
 }
 export interface Marker { offset: number; frame: number; name: string }
 export interface Layer {
+  /** Editor-only raw record provenance for independent duplicates. */
+  originalRecord?: number
   offset: number; name: string; start: number; end: number; timeOffset: number; timeScale: number
   flags: number; quality: number; itemType: number; item: number; parent: number
   markers: Marker[]; video: LayerVideo | null; audio: Curve[]

@@ -1,3 +1,5 @@
+import { watch } from 'vue'
+import { pastedKeys, shiftedKeys } from './keyEditing'
 import type { EditableChannel } from '../core/aet/types'
 import { videoCurve } from '../core/aet/types'
 import { keysWithValue } from '../core/animation/setValue'
@@ -35,9 +37,16 @@ export interface PropertyActions {
   setKeyValue(keyRef: KeyRef, value: number): void
   setKeyTangent(keyRef: KeyRef, value: number): void
   jumpKey(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }, direction: -1 | 1): void
+  copySelectedKeys(): void
+  pasteSelectedKeys(): void
+  selectKeys(keys: KeyRef[]): void
+  moveSelectedKeys(delta: number): void
+  toggleKey(keyRef: KeyRef): void
+  removeSelectedKeys(): void
   selectKey(keyRef: KeyRef | null): void
   setPreviewVisible(layerRef: LayerRef, visible: boolean): void
   selectLayer(layerRef: LayerRef | null): void
+  enterComposition(layerRef: LayerRef): void
   openComposition(sceneIndex: number, id: number): void
   hasKeyAtCurrentFrame(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }): boolean
   canJumpKey(channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }, direction: -1 | 1): boolean
@@ -300,7 +309,114 @@ export function createPropertyActions(
     }
   }
 
+  let clipboard: { ref: KeyRef; value: number; tangent: number }[] = []
+  watch(() => editor.doc.value?.source, () => { clipboard = [] }, { flush: 'sync' })
+  function copySelectedKeys(): void {
+    const copied: typeof clipboard = []
+    for (const ref of workspace.selectedKeys.value) {
+      const curve = resolveCurve(editor, ref.property)
+      const key = curve?.keys.find(k => Math.fround(k.frame) === Math.fround(ref.frame))
+      if (!key) { editor.error.value = '选中的关键帧已失效'; return }
+      if (curve!.keys.length < 2) { editor.error.value = '常量轨道没有可复制的时间关键帧'; return }
+      copied.push({ ref: { property: { ...ref.property }, frame: key.frame }, value: key.value, tangent: key.tangent })
+    }
+    if (copied.length) clipboard = copied
+  }
+  function pasteSelectedKeys(): void {
+    if (editor.busy.value || !clipboard.length) return
+    try {
+      const delta = editor.frame.value - Math.min(...clipboard.map(k => k.ref.frame))
+      const groups = new Map<string, { ref: KeyRef; keys: { frame: number; value: number; tangent: number }[] }>()
+      for (const entry of clipboard) {
+        if (entry.ref.property.sceneIndex !== editor.sceneIndex.value || entry.ref.property.compositionId !== editor.compositionId.value) throw new Error('请返回复制关键帧的原合成粘贴')
+        const id = keyIdentity({ ...entry.ref, frame: 0 })
+        const group = groups.get(id) ?? { ref: entry.ref, keys: [] }
+        group.keys.push({ frame: Math.fround(entry.ref.frame + delta), value: entry.value, tangent: entry.tangent })
+        groups.set(id, group)
+      }
+      const proposals = [...groups.values()].map(group => {
+        const ctx = resolveLayerContext(editor, group.ref.property), curve = resolveCurve(editor, group.ref.property)
+        if (!ctx || !curve || (ctx.layer.flags & 32)) throw new Error('粘贴目标已失效或包含锁定图层')
+        return { curve, keys: pastedKeys(curve.keys, group.keys) }
+      })
+      workspace.requestPause()
+      editor.edit(() => { for (const proposal of proposals) proposal.curve.keys = proposal.keys })
+      selectKeys(clipboard.map(k => ({ property: k.ref.property, frame: Math.fround(k.ref.frame + delta) })))
+    } catch (cause) { editor.error.value = String(cause) }
+  }
+
+  const keyIdentity = (key: KeyRef) => `${key.property.sceneIndex}:${key.property.compositionId}:${key.property.layerId}:${key.property.channel}:${Math.fround(key.frame)}`
+  function selectKeys(keys: KeyRef[]): void {
+    const unique = new Map<string, KeyRef>()
+    for (const key of keys) {
+      if (key.property.sceneIndex !== editor.sceneIndex.value || key.property.compositionId !== editor.compositionId.value) continue
+      const curve = resolveCurve(editor, key.property)
+      if (curve?.keys.some(k => Math.fround(k.frame) === Math.fround(key.frame))) unique.set(keyIdentity(key), key)
+    }
+    const next = [...unique.values()], primary = next.at(-1)
+    workspace.selectLayer(primary?.property ?? null)
+    workspace.selectedKeys.value = next
+    workspace.activeKey.value = primary ?? null
+    workspace.activeProperty.value = primary?.property ?? null
+  }
+
+  function toggleKey(keyRef: KeyRef): void {
+    const ctx = resolveLayerContext(editor, keyRef.property)
+    const curve = resolveCurve(editor, keyRef.property)
+    if (!ctx || !curve?.keys.some(k => Math.fround(k.frame) === Math.fround(keyRef.frame))) return
+    const previous = [...workspace.selectedKeys.value]
+    const identity = keyIdentity(keyRef)
+    const next = previous.some(k => keyIdentity(k) === identity)
+      ? previous.filter(k => keyIdentity(k) !== identity) : [...previous, keyRef]
+    const primary = next.at(-1)
+    workspace.selectLayer(primary?.property ?? null)
+    workspace.selectedKeys.value = next
+    workspace.activeProperty.value = primary?.property ?? null
+    workspace.activeKey.value = primary ?? null
+  }
+
+  function moveSelectedKeys(delta: number): void {
+    if (editor.busy.value || !delta || !workspace.selectedKeys.value.length) return
+    const selected = [...workspace.selectedKeys.value]
+    try {
+      const groups = new Map<string, { key: KeyRef; times: number[] }>()
+      for (const key of selected) {
+        const id = keyIdentity({ ...key, frame: 0 })
+        const group = groups.get(id) ?? { key, times: [] }
+        group.times.push(key.frame); groups.set(id, group)
+      }
+      const proposals = [...groups.values()].map(({ key, times }) => {
+        const ctx = resolveLayerContext(editor, key.property), curve = resolveCurve(editor, key.property)
+        if (!ctx || !curve || (ctx.layer.flags & 32)) throw new Error('选中的关键帧已失效或包含锁定图层')
+        return { curve, keys: shiftedKeys(curve.keys, times, delta) }
+      })
+      workspace.requestPause()
+      editor.edit(() => { for (const proposal of proposals) proposal.curve.keys = proposal.keys })
+      const next = selected.map(key => ({ ...key, frame: Math.fround(key.frame + delta) }))
+      workspace.selectedKeys.value = next
+      workspace.activeKey.value = next.at(-1) ?? null
+      workspace.activeProperty.value = next.at(-1)?.property ?? null
+    } catch (cause) { editor.error.value = String(cause) }
+  }
+
+  function removeSelectedKeys(): void {
+    if (editor.busy.value || !workspace.selectedKeys.value.length) return
+    // Resolve the complete group before mutation; stale or locked members reject atomically.
+    const targets = workspace.selectedKeys.value.map(key => ({ key, ctx: resolveLayerContext(editor, key.property), curve: resolveCurve(editor, key.property) }))
+    if (targets.some(t => !t.ctx || (t.ctx.layer.flags & 32) || !t.curve?.keys.some(k => Math.fround(k.frame) === Math.fround(t.key.frame)))) {
+      editor.error.value = '选中的关键帧已失效或包含锁定图层'
+      return
+    }
+    workspace.requestPause()
+    editor.edit(() => {
+      for (const { key, curve } of targets) curve!.keys = curve!.keys.filter(k => Math.fround(k.frame) !== Math.fround(key.frame))
+    })
+    workspace.selectedKeys.value = []
+    workspace.activeKey.value = null
+  }
+
   function selectKey(keyRef: KeyRef | null): void {
+    workspace.selectedKeys.value = []
     if (!keyRef) {
       workspace.activeKey.value = null
       return
@@ -312,6 +428,7 @@ export function createPropertyActions(
 
     workspace.activeProperty.value = keyRef.property
     workspace.activeKey.value = { property: keyRef.property, frame: found.frame }
+    workspace.selectedKeys.value = [workspace.activeKey.value]
   }
 
   function setPreviewVisible(layerRef: LayerRef, visible: boolean): void {
@@ -323,6 +440,10 @@ export function createPropertyActions(
 
   function selectLayer(layerRef: LayerRef | null): void {
     workspace.selectLayer(layerRef)
+  }
+
+  function enterComposition(layerRef: LayerRef): void {
+    if (!editor.busy.value) workspace.enterComposition(layerRef)
   }
 
   function openComposition(sceneIndex: number, id: number): void {
@@ -349,6 +470,12 @@ export function createPropertyActions(
   }
 
   return {
+    copySelectedKeys,
+    pasteSelectedKeys,
+    selectKeys,
+    moveSelectedKeys,
+    toggleKey,
+    removeSelectedKeys,
     setValue,
     addKey,
     removeKey,
@@ -359,6 +486,7 @@ export function createPropertyActions(
     selectKey,
     setPreviewVisible,
     selectLayer,
+    enterComposition,
     openComposition,
     hasKeyAtCurrentFrame,
     canJumpKey,
