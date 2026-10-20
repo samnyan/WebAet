@@ -158,6 +158,10 @@ Opened those downloaded bytes in a second clean page, then imported the original
 
 The previous timeout was caused by a harness assumption: importing an AET into an already open editor updates available documents but does not automatically open it (`importFiles` only calls open when there is no current doc). No implementation change was necessary for this fresh-page readback. This closes the targeted post-refactor Inspector/edit/download/reopen check, not the directory-picker workflow, timeline key dragging, complete menu simulation or game parity. Browser pages were closed and no temporary harness/output files were added.
 
+## Post-refactor timeline pointer acceptance
+
+With original menu companions, viewport 1600×1000, opened scene 0 / composition 60 (offset 3264), layer `chara_mainmenu_01_mik` (70752). Expanded the layer and Transform group using workspace state; pointer coordinates were derived from the mounted timeline's actual row/scroll geometry (labels 340px, 3px/frame). Real Playwright mouse down/move/up moved positionX key frame 11 to 30. Actual undo restored the complete original curve and redo restored the complete moved curve. After undo, repeating the drag then dispatching pointercancel preserved the full original curve; dirty=false, error empty, and redo remained available. This checks one real key drag/history/cancel path, not every timeline interaction or directory loading. No source changes or temporary files were required. Concurrent uncommitted resource-library/material-picker work was left untouched.
+
 ## Remaining acceptance gap
 
 Do not mark the character issue fixed based on branch isolation. No newly demonstrated transform or texture-binding defect has been identified in this baseline.
