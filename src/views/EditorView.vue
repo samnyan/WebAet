@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, provide, ref } from 'vue'
+import { usePanelSizes } from '../editor/panelSizes'
 import { materialPackagesKey } from '../editor/materialPackages'
 import type { MaterialPackage } from '../editor/materialPicker'
 import { NButton, NSelect, NSpin, NTag } from 'naive-ui'
@@ -16,6 +17,7 @@ import AetStage from '../components/editor/AetStage.vue'
 import AetTimeline from '../components/editor/AetTimeline.vue'
 import EditorStatusBar from '../components/editor/EditorStatusBar.vue'
 const e = createEditor(), { locale, t } = useI18n()
+const { host: workspaceHost, style: panelStyle, start: resizePanel } = usePanelSizes()
 const input = ref<HTMLInputElement>(), warnings = ref<string[]>([])
 const resourceWarnings = computed(() => { e.version.value; e.resourceVersion.value; return unresolvedSpriteSources(e.doc.value, e.library) })
 const allWarnings = computed(() => [...warnings.value, ...resourceWarnings.value])
@@ -113,7 +115,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', keydown); window.r
       <n-button size="tiny" @click="locale = locale === 'zh-CN' ? 'en' : 'zh-CN'">{{ t('language') }}</n-button>
     </div>
     <input ref="input" hidden type="file" multiple accept=".bin,.farc,.webaet" @change="filesChanged" />
-    <n-spin :show="e.busy.value" class="workspace-spin"><div class="workspace"><LeftSidebar :editor="e" :assets="libraryAssets" @open-asset="changeAsset" @open-composition="openComposition" /><AetStage :editor="e" @warnings="warnings = $event" /><LayerInspector :editor="e" /></div></n-spin>
+    <n-spin :show="e.busy.value" class="workspace-spin"><div :ref="el => workspaceHost = el as HTMLElement | undefined" class="workspace" :style="panelStyle"><LeftSidebar :editor="e" :assets="libraryAssets" @open-asset="changeAsset" @open-composition="openComposition" /><div class="panel-divider" role="separator" aria-label="调整左侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'left')" /><AetStage :editor="e" @warnings="warnings = $event" /><div class="panel-divider" role="separator" aria-label="调整右侧面板宽度" aria-orientation="vertical" @pointerdown.prevent="resizePanel($event, 'right')" /><LayerInspector :editor="e" /></div></n-spin>
     <div v-if="!e.doc.value" class="welcome"><h2>AET Layout & Animation</h2><p>{{ t('ready') }}</p><p>先选择 diva_main 资源目录建立索引，再从顶部选择 AET。目录索引不读取贴图内容；单文件可独立导入。</p><n-button type="primary" :disabled="e.busy.value" @click="input?.click()">打开 AET / Sprite</n-button></div>
     <AetTimeline :editor="e" />
     <EditorStatusBar :editor="e" :warnings="allWarnings" :progress="progress" @cancel="scanController?.abort(); loadController?.abort()" />

@@ -13,6 +13,6 @@ export function compositionLabels(scene: Scene): Map<number, string> {
     const root = index === scene.compositions.length - 1
     const names = [...aliases.get(comp.offset) ?? []]
     const label = root ? 'ROOT' : names.length ? names.join(' / ') : `未命名合成 #${index}`
-    return [comp.offset, `${label} · ${comp.layers.length} 个直属图层`]
+    return [comp.offset, `${label} (${comp.layers.length}层)`]
   }))
 }

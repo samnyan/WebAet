@@ -10,6 +10,8 @@ button, input { font: inherit; }
 .workspace-spin { flex: 1; min-height: 0; display: flex; }
 .workspace-spin > .n-spin-content { display: flex; flex: 1; min-width: 0; min-height: 0; }
 .workspace { display: grid; grid-template-columns: 270px minmax(100px, 1fr) 330px; flex: 1; min-width: 0; min-height: 0; }
+.png-menu{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:145px}.png-menu .n-button{justify-content:flex-start}.png-menu .n-checkbox{padding-top:8px;border-top:1px solid #ffffff18}
+.panel-divider{cursor:col-resize;touch-action:none;background:#20232a;position:relative}.panel-divider:hover,.panel-divider:active{background:#72c6b266}.workspace>.panel{min-width:0}
 .panel { display: flex; flex-direction: column; min-height: 0; background: #252930; }
 .panel header { height: 35px; padding: 8px 12px; background: #292e36; border-bottom: 1px solid #383f49; display: flex; justify-content: space-between; }
 .hierarchy { border-right: 1px solid #383f49; } .inspector { border-left: 1px solid #383f49; }
@@ -23,7 +25,7 @@ button, input { font: inherit; }
 .property-group > b { display: block; margin-bottom: 9px; color: #c7d2e3; }.property-group code { color: #7f8fa4; }
 .field { display: grid; grid-template-columns: 85px minmax(0, 1fr); align-items: center; gap: 6px; margin: 7px 0; }
 .field > span { font-size: 11px; color: #aeb9c9; }.field small { color: #79dac3; }.field .n-input-number { min-width: 0; }
-.stage-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }.stage-toolbar { height: 37px; font-size: 11px; }
+.stage-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }.stage-toolbar { min-height:37px;height:auto;flex-wrap:wrap;font-size:11px;gap:6px;padding:5px 8px; }
 .stage-host { flex: 1; min-height: 0; position: relative; overflow: hidden; }.stage-host canvas { width: 100%; height: 100%; position: absolute; touch-action: none; }
 .stage-panel footer { font-size: 10px; color: #8993a3; padding: 4px 10px; background: #1a1d23; }
 .statusbar { border-top: 1px solid #353b46; padding: 4px 12px; color: #899aae; font-size: 10px; }

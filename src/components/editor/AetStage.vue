@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { NButton, NCheckbox } from 'naive-ui'
+import { NButton, NCheckbox, NPopover } from 'naive-ui'
 import type { Editor } from '../../editor/state'
 import MenuCharacterPreview from './MenuCharacterPreview.vue'
 import { createSceneEvaluator } from '../../core/render/evaluate'
@@ -96,17 +96,17 @@ function focusSelected() {
   const nextScale = base * zoom.value
   pan.value = { x: (scene.width / 2 - (left + right) / 2) * nextScale, y: (scene.height / 2 - (top + bottom) / 2) * nextScale }
 }
-async function exportPreview(native = false, branch = false) {
+async function exportPreview(branch = false) {
   if (!e.scene.value || !canvas.value) return
   try {
     if (branch && e.selectedId.value === null) return
-    let target = canvas.value
-    if (native) {
+    let target: HTMLCanvasElement
+    {
       const result = renderSceneFrame(e.scene.value, e.compositionId.value, e.frame.value, e.library, transparentExport.value, branch ? e.selectedId.value : null)
       target = result.canvas
       e.notices.value = result.warnings.map(w => `场景 PNG: ${w}`)
-    } else { cancelAnimationFrame(raf); raf = 0; draw() }
-    const name = `${e.doc.value!.name.replace(/\.bin$/i, '')}_${e.scene.value.name}_${native ? `${branch ? `branch-${e.selectedId.value}` : 'scene'}${transparentExport.value ? '-transparent' : ''}` : view3D.value ? '3d' : '2d'}_${e.frame.value.toFixed(2)}f.png`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    }
+    const name = `${e.doc.value!.name.replace(/\.bin$/i, '')}_${e.scene.value.name}_${branch ? `branch-${e.selectedId.value}` : 'scene'}${transparentExport.value ? '-transparent' : ''}_${e.frame.value.toFixed(2)}f.png`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
     const blob = await new Promise<Blob>((resolve, reject) => target.toBlob(b => b ? resolve(b) : reject(new Error('PNG 编码失败')), 'image/png'))
     const url = URL.createObjectURL(blob)
     try { const link = document.createElement('a'); link.href = url; link.download = name; link.click() }
@@ -128,7 +128,18 @@ function reset() { yaw.value = 25; pitch.value = -20; zoom.value = 1; pan.value 
 </script>
 <template>
   <section class="stage-panel">
-    <div class="stage-toolbar"><n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button><template v-if="view3D"><n-button data-testid="view-front" size="tiny" @click="preset(0, 0)">正面</n-button><n-button data-testid="view-right" size="tiny" @click="preset(90, 0)">右侧</n-button><n-button data-testid="view-top" size="tiny" @click="preset(0, -90)">顶面</n-button></template><n-checkbox v-if="view3D" data-testid="perspective" v-model:checked="perspective" size="small">透视（近似）</n-checkbox><span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" /><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button><n-button data-testid="focus-selected" size="tiny" :disabled="e.selectedId.value === null" @click="focusSelected">聚焦选中</n-button><n-button data-testid="export-preview" size="tiny" :disabled="!e.scene.value || e.busy.value" title="保存当前视口，包含选框、辅助线和当前预览限制；不是游戏原生分辨率渲染" @click="e.runOperation('导出预览 PNG', () => exportPreview(false))">导出预览 PNG</n-button><n-button data-testid="export-scene" size="tiny" :disabled="!e.scene.value || e.busy.value" title="原始尺寸、当前合成和帧；忽略临时隐藏/隔离，无选框和辅助线，仍使用当前预览渲染器" @click="e.runOperation('导出场景 PNG', () => exportPreview(true))">场景 PNG</n-button><n-button data-testid="export-branch" size="tiny" :disabled="!e.scene.value || e.selectedId.value === null || e.busy.value" title="原始场景尺寸，仅导出选中分支及配对遮罩；保留父级变换，忽略临时隐藏" @click="e.runOperation('导出分支 PNG', () => exportPreview(true, true))">分支 PNG</n-button><n-checkbox data-testid="transparent-export" v-model:checked="transparentExport" :disabled="e.busy.value" size="small" title="仅影响原始尺寸场景 PNG，不改变 AET 场景颜色">透明底</n-checkbox><n-button size="tiny" @click="reset">适应画布</n-button></div>
+    <div class="stage-toolbar">
+      <n-button data-testid="view-mode" size="tiny" @click="view3D = !view3D">{{ view3D ? '3D View' : '2D View' }}</n-button>
+      <template v-if="view3D"><n-button size="tiny" @click="preset(0, 0)">正面</n-button><n-button size="tiny" @click="preset(90, 0)">右侧</n-button><n-button size="tiny" @click="preset(0, -90)">顶面</n-button><n-checkbox v-model:checked="perspective" size="small">透视（近似）</n-checkbox></template>
+      <span>{{ e.scene.value?.width ?? '—' }} × {{ e.scene.value?.height ?? '—' }}</span><n-checkbox v-model:checked="wireframe" size="small">Wireframe</n-checkbox><n-checkbox v-model:checked="isolate" size="small">Isolate</n-checkbox><div class="spacer" />
+      <n-button size="tiny" @click="reset">适应画布</n-button><n-button size="tiny" @click="zoom = Math.max(0.1, zoom / 1.2)">−</n-button><span>{{ Math.round(zoom * 100) }}%</span><n-button size="tiny" @click="zoom = Math.min(8, zoom * 1.2)">+</n-button>
+      <n-button data-testid="focus-selected" size="tiny" :disabled="e.selectedId.value === null" @click="focusSelected">聚焦选中</n-button>
+      <n-popover trigger="click" placement="bottom-end" :show-arrow="false"><template #trigger><n-button size="tiny" :disabled="!e.scene.value || e.busy.value">导出PNG ▾</n-button></template><div class="png-menu">
+        <n-button text :disabled="!e.scene.value || e.busy.value" @click="e.runOperation('导出场景PNG', () => exportPreview(false))">导出场景PNG</n-button>
+        <n-button text :disabled="!e.scene.value || e.selectedId.value === null || e.busy.value" title="导出选中分支，保留父级变换及遮罩" @click="e.runOperation('导出组件PNG', () => exportPreview(true))">导出组件PNG</n-button>
+        <n-checkbox v-model:checked="transparentExport" :disabled="e.busy.value" size="small">透明底</n-checkbox>
+      </div></n-popover>
+    </div>
     <MenuCharacterPreview :editor="e" />
     <div v-if="secondaryLayers.length" class="branch-hint">
       <label>子菜单（部分模拟） <select data-testid="secondary-preview" v-model="secondaryChoice" :disabled="e.busy.value || view3D || isolate"><option value="">原始分支 / 单时钟</option><option value="arcade">Arcade on + Mix off</option><option value="mix">Mix on + Arcade off</option></select></label>

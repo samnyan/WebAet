@@ -29,7 +29,7 @@ export function resourceRows(assets: readonly WorkspaceAsset[], doc: AetDocument
     const walk = (id: number, key: string, depth: number, ancestors: Set<number>, label: string) => {
       const comp = map.get(id); if (!comp) return
       const cycle = ancestors.has(id), ownMatch = matches(label)
-      const node: ResourceNode = { key, label: `${label} [Comp]${cycle ? ' · 循环引用' : ''}`, depth, expandable: !cycle && comp.layers.some(l => l.itemType === 3), sceneIndex: si, compositionId: id, preview: { kind: 'composition', sceneIndex: si, compositionId: id } }
+      const node: ResourceNode = { key, label: `${label}${cycle ? ' · 循环引用' : ''}`, depth, expandable: !cycle && comp.layers.some(l => l.itemType === 3), sceneIndex: si, compositionId: id, preview: { kind: 'composition', sceneIndex: si, compositionId: id } }
       if (!search || ownMatch) subtree.push(node)
       if (!cycle && !search && expanded.has(key)) {
         const next = new Set(ancestors); next.add(id)
