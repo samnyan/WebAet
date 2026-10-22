@@ -23,9 +23,15 @@ export class FgoFarcReader implements ArchiveReader {
 
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     const indexSize = view.getUint32(4, false)
-    const archiveFlags = view.getUint32(8, false)
-
     if (indexSize < 24 || indexSize > bytes.length) return false
+
+    // DIVA classic FArc has offset table at byte 12 where the first entry name is null-terminated string.
+    // FGO FARc has uint32 innerHeaderSize at byte 16 (often 0x10).
+    // If byte 12 is zero (as checksum in FGO), or if archiveFlags (byte 8) is a valid flag
+    const checksum = view.getUint32(12, false)
+    if (checksum === 0) return true
+
+    const archiveFlags = view.getUint32(8, false)
     return (archiveFlags & 0x40) !== 0 || (archiveFlags & ENCRYPTION_FLAG) !== 0
   }
 
@@ -114,7 +120,20 @@ export class FgoFarcReader implements ArchiveReader {
       } else if ((entry.flags & CHUNKED_GZIP_FLAG) === CHUNKED_GZIP_FLAG) {
         extracted = this.extractChunked(payload, false, entry.uncompressedSize)
       } else if ((entry.flags & COMPRESSION_FLAG) !== 0) {
-        extracted = unpackGzip(payload, entry.uncompressedSize)
+        // Gzip payload may have alignment zero-padding at the end.
+        // Trim to the 4-byte ISIZE footer before calling unpackGzip.
+        let trimmedPayload = payload
+        if (entry.uncompressedSize > 0 && payload.length >= 18) {
+          const target = entry.uncompressedSize >>> 0
+          const pView = new DataView(payload.buffer, payload.byteOffset, payload.byteLength)
+          for (let end = payload.length; end >= Math.max(18, payload.length - 16); end--) {
+            if (pView.getUint32(end - 4, true) === target) {
+              trimmedPayload = payload.subarray(0, end)
+              break
+            }
+          }
+        }
+        extracted = unpackGzip(trimmedPayload, entry.uncompressedSize)
       } else {
         extracted = entry.uncompressedSize > 0 ? payload.slice(0, entry.uncompressedSize) : payload
       }

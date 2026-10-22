@@ -93,6 +93,18 @@ export class FgoAetParser implements AetParser {
       return new TextDecoder('utf-8').decode(source.subarray(offset, end))
     }
 
+    const relativeUnchecked = (fieldOffset: number, rel: number) => {
+      const target = fieldOffset + rel
+      return target < 0 || target >= source.length ? -1 : target
+    }
+
+    const tryPropertyName = (offset: number): string | null => {
+      if (offset < 0 || offset > source.length - 4) return null
+      const target = relativeUnchecked(offset, i32(offset))
+      if (target < 0) return null
+      return stringAt(target) || null
+    }
+
     const count = u32(32)
     if (count > 100000) throw new Error('FGO AET record count unreasonable')
 
@@ -117,8 +129,8 @@ export class FgoAetParser implements AetParser {
         sources: [],
       }
 
-      if (rec.type === 0) {
-        // Scene / Composition
+      if (rec.type === 1) {
+        // Scene / Composition (Type 1 in FGO AET enum)
         const childCount = u32(recordOffset + 68)
         const childOffset = recordOffset + 72
         for (let j = 0; j < childCount; j++) {
@@ -137,12 +149,12 @@ export class FgoAetParser implements AetParser {
             rotation: f32(cOffset + 40),
             properties: [],
           }
-          const nested = relative(cOffset + 52, i32(cOffset + 52))
+          const nestedRel = i32(cOffset + 52)
+          const nested = nestedRel !== 0 ? relativeUnchecked(cOffset + 52, nestedRel) : 0
           if (nested > 0 && nested < source.length - 48) {
             let cand = nested + 28
             while (cand < source.length - 8) {
-              const relName = relative(cand, i32(cand))
-              const propName = stringAt(relName)
+              const propName = tryPropertyName(cand)
               if (!propName || !propName.startsWith('ADBE ')) break
 
               const keyCount = u32(cand + 4)
@@ -160,8 +172,8 @@ export class FgoAetParser implements AetParser {
           }
           rec.children.push(child)
         }
-      } else if (rec.type === 1) {
-        // Asset / Video
+      } else if (rec.type === 2) {
+        // Asset / Video (Type 2 in FGO AET enum)
         const sourceCount = u32(recordOffset + 52)
         const sourceOffset = recordOffset + 56
         for (let j = 0; j < sourceCount; j++) {
@@ -180,8 +192,8 @@ export class FgoAetParser implements AetParser {
 
     const fps = 60
     const scenes: Scene[] = []
-    const sceneRecords = records.filter((r) => r.type === 0)
-    const assetRecords = records.filter((r) => r.type === 1)
+    const sceneRecords = records.filter((r) => r.type === 1)
+    const assetRecords = records.filter((r) => r.type === 2)
 
     // Build unified videos from Asset records
     const videos: Video[] = assetRecords.map((asset) => {
@@ -235,8 +247,8 @@ export class FgoAetParser implements AetParser {
     const compositions: Composition[] = sceneRecords.map((sRec) => {
       const layers: Layer[] = sRec.children.map((child) => {
         const target = records[child.kind]
-        const isComp = target?.type === 0
-        const isAsset = target?.type === 1
+        const isComp = target?.type === 1
+        const isAsset = target?.type === 2
 
         const startSec = Number.isFinite(child.opacity) ? child.opacity : 0
         const durSec = Number.isFinite(child.scale) ? child.scale : 10

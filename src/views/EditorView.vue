@@ -58,8 +58,10 @@ const assets = computed(() =>
     ? indexedPaths.value
         .filter(
           (p) =>
+            // FGO AET files are often inside aet_*.farc or standalone *.bin
             (/\.bin$/i.test(p) && !/(?:^|\/)(aet_db|spr_|str_|auth_|pv_)/i.test(p)) ||
-            /(?:^|\/)aet_.*\.bin$/i.test(p),
+            /(?:^|\/)aet_.*\.bin$/i.test(p) ||
+            /(?:^|\/)aet_.*\.farc$/i.test(p),
         )
         .map((p) => ({ value: p, label: p }))
     : e.documents.value.map((d) => ({ value: d.name, label: d.name })),
@@ -191,12 +193,24 @@ async function changeAsset(name: string) {
     const file = await root.value.file(name),
       bytes = new Uint8Array(await file.arrayBuffer())
     signal.throwIfAborted()
-    e.open(bytes, name)
+
+    if (/\.farc$/i.test(name)) {
+      // Unpack the farc archive to find the inner AET .bin
+      await e.importFiles([file], signal)
+      // The open call inside importFiles will set doc.value
+    } else {
+      e.open(bytes, name)
+    }
     activeAssetPath.value = name
     e.library.clear()
     e.documents.value = []
     e.resourceVersion.value++
-    const sources = e.doc.value!.scenes.flatMap((s) => s.videos.flatMap((v) => v.sources))
+
+    if (!e.doc.value) {
+      throw new Error('未找到有效的 AET 数据')
+    }
+
+    const sources = e.doc.value.scenes.flatMap((s) => s.videos.flatMap((v) => v.sources))
     const dbPaths = root.value.companions(name, new Set(['spr_db.bin']))
     const database: SpriteDatabaseEntry[] = []
     for (const path of dbPaths) {

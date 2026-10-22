@@ -14,7 +14,11 @@ export function parseTxp3TextureSet(bytes: Uint8Array): Texture[] {
     if (r.u32(s) !== 0x02505854) throw new Error('Expected TXP2 subtexture')
     const width = r.u32(s + 4)
     const height = r.u32(s + 8)
-    const format = r.u32(s + 12)
+    let format = r.u32(s + 12)
+    // FGO Arcade uses 130 and 131 for BC7
+    if (format === 130 || format === 131) {
+      format = 15
+    }
     const size = r.u32(s + 20)
     if (!width || !height || width * height > 67108864)
       throw new Error('Invalid texture dimensions')

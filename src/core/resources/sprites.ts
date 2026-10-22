@@ -31,9 +31,10 @@ export function parseSpriteSet(bytes: Uint8Array, name: string): SpriteSet {
     const s = p + r.u32(p + 12)
     if (r.u32(s) !== 0x02505854) throw new Error('Expected TXP2 subtexture')
     const width = r.u32(s + 4),
-      height = r.u32(s + 8),
-      format = r.u32(s + 12),
-      size = r.u32(s + 20)
+      height = r.u32(s + 8)
+    let format = r.u32(s + 12)
+    if (format === 130 || format === 131) format = 15
+    const size = r.u32(s + 20)
     if (!width || !height || width * height > 67108864)
       throw new Error('Invalid texture dimensions')
     r.check(s + 24, size)
