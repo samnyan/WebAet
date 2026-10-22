@@ -1,25 +1,41 @@
 # WebAet
 
-Browser-local Project DIVA AET layout and animation editor. Vue 3 + TypeScript + Naive UI + Vue Router 4 + vue-i18n 11. No parsing server or .NET runtime required.
+纯前端实现的初音未来 Project DIVA AET 动画编辑器。  
+目前主要支持 **Project DIVA MegaMix+**。
 
-## Run
+🌐 **在线体验**：https://webaet.my-aqua.net/
+
+---
+
+## 使用方法
+
+1. **准备资源**  
+   先使用工具解包游戏的 `.cpk` 文件（例如 `diva_main`）。
+
+2. **导入目录**  
+   进入应用后，点击顶部的 **「选择资源目录」**，选中解开的本地 `diva_main` 目录，等待扫描完成即可。  
+   扫描结果会保存在本地浏览器缓存中，下次打开只要选择相同目录就可以直接继续使用。
+
+3. **打开工程**  
+   在左侧「库」面板中找到你想编辑的 AET 文件（以 `.bin` 结尾），**双击打开**。  
+   接下来的操作和 AE 等动画编辑软件大同小异。
+
+4. **素材与贴图关联**  
+   需要注意的是，贴图资源是引用自 `spr_*.farc` 中的内容。如果要在一个 AET 工程中使用，需要先在工程里创建对应的资源项。  
+   新建图层后，在右侧的「效果」窗口中可以关联已有资源或创建新资源。
+
+---
+
+## 本地开发与构建
 
 ```sh
 pnpm install
 pnpm dev
 pnpm build
-pnpm preview
 ```
 
-If Linux exhausts its file-watch limit, start development with `CHOKIDAR_USEPOLLING=true pnpm dev`. Production previews do not need a file watcher.
+---
 
-## Code formatting
+## 说明
 
-Prettier formats Vue single-file components, TypeScript, styles and documentation. It uses two-space indentation, single quotes, no semicolons and a 100-column print width. Vue `<script>` and `<style>` contents are not additionally indented; HTML whitespace sensitivity keeps Prettier's default `css` behavior.
-
-- `pnpm format`: format the project manually when needed.
-- `pnpm format:check`: check formatting without changing files.
-- `pnpm install`: installs the Husky Git hook through the `prepare` script.
-- `git commit`: automatically runs Prettier on supported staged files through lint-staged and stages the formatting changes. Unstaged changes in partially staged files are temporarily hidden and restored afterward; a formatter failure blocks the commit.
-
-Only staged files are formatted on commit; existing files are not reformatted until they are staged or `pnpm format` is run. Formatting does not replace type checking or structural code review.
+本项目完全由 AI 生成。感谢所有被（自愿或非自愿）参与过 ChatGPT 等大模型训练的代码库。
