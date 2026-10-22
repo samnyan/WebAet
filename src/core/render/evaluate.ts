@@ -1,39 +1,133 @@
 import type { Composition, Layer, Scene, Video } from '../aet/types'
 import { sampleCurve, type Matrix } from '../animation/curves'
-import { identity4, multiply4, layerMatrix4, orthographicMatrix, type Matrix4 } from '../animation/transform3d'
+import {
+  identity4,
+  multiply4,
+  layerMatrix4,
+  orthographicMatrix,
+  type Matrix4,
+} from '../animation/transform3d'
 import type { Perspective } from './perspective'
 import { sceneCameraMatrix } from './camera'
-export interface DrawItem { world?: Matrix4; perspective?: Perspective; layer: Layer; path: number[]; matrix: Matrix; opacity: number; video: Video; sourceName: string; sourceId?: number; blend: number; matte: number; mask?: DrawItem }
-export interface Evaluation { items: DrawItem[]; warnings: string[] }
+export interface DrawItem {
+  world?: Matrix4
+  perspective?: Perspective
+  layer: Layer
+  path: number[]
+  matrix: Matrix
+  opacity: number
+  video: Video
+  sourceName: string
+  sourceId?: number
+  blend: number
+  matte: number
+  mask?: DrawItem
+}
+export interface Evaluation {
+  items: DrawItem[]
+  warnings: string[]
+}
 export function layerMatrix(layer: Layer, frame: number): Matrix {
   return orthographicMatrix(layerMatrix4(layer, frame))
 }
 /** Recreate after structural edits; curve values are read live, never cached across frames. */
 export function createSceneEvaluator(scene: Scene) {
-  const compositions = new Map(scene.compositions.map(c => [c.offset, c])), videos = new Map(scene.videos.map(v => [v.offset, v]))
-  const layers = new Map(scene.compositions.map(c => [c, new Map(c.layers.map(l => [l.offset, l]))]))
-  return (composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4(), perspective?: Perspective) => evaluateIndexed(scene, compositions, videos, layers, composition, frame, hidden, isolated, view, perspective)
+  const compositions = new Map(scene.compositions.map((c) => [c.offset, c])),
+    videos = new Map(scene.videos.map((v) => [v.offset, v]))
+  const layers = new Map(
+    scene.compositions.map((c) => [c, new Map(c.layers.map((l) => [l.offset, l]))]),
+  )
+  return (
+    composition: number,
+    frame: number,
+    hidden: ReadonlySet<number> = new Set(),
+    isolated: number | null = null,
+    view: Matrix4 = identity4(),
+    perspective?: Perspective,
+  ) =>
+    evaluateIndexed(
+      scene,
+      compositions,
+      videos,
+      layers,
+      composition,
+      frame,
+      hidden,
+      isolated,
+      view,
+      perspective,
+    )
 }
-export function evaluateScene(scene: Scene, composition: number, frame: number, hidden: ReadonlySet<number> = new Set(), isolated: number | null = null, view: Matrix4 = identity4(), perspective?: Perspective): Evaluation {
+export function evaluateScene(
+  scene: Scene,
+  composition: number,
+  frame: number,
+  hidden: ReadonlySet<number> = new Set(),
+  isolated: number | null = null,
+  view: Matrix4 = identity4(),
+  perspective?: Perspective,
+): Evaluation {
   return createSceneEvaluator(scene)(composition, frame, hidden, isolated, view, perspective)
 }
-function evaluateIndexed(scene: Scene, compositions: Map<number, Composition>, videos: Map<number, Video>, layerIndices: Map<Composition, Map<number, Layer>>, composition: number, frame: number, hidden: ReadonlySet<number>, isolated: number | null, view: Matrix4, perspective?: Perspective): Evaluation {
-  const items: DrawItem[] = [], warnings = new Set<string>()
+function evaluateIndexed(
+  scene: Scene,
+  compositions: Map<number, Composition>,
+  videos: Map<number, Video>,
+  layerIndices: Map<Composition, Map<number, Layer>>,
+  composition: number,
+  frame: number,
+  hidden: ReadonlySet<number>,
+  isolated: number | null,
+  view: Matrix4,
+  perspective?: Perspective,
+): Evaluation {
+  const items: DrawItem[] = [],
+    warnings = new Set<string>()
   // AetObj keeps pending sprite state across recursive DispComp calls.
   let pendingMatte: DrawItem | undefined
-  if (scene.camera.length) warnings.add('AET camera Eye translation applied (ReDIVA runtime); full camera perspective is not implemented')
-  const walk = (id: number, time: number, base: Matrix4, alpha: number, path: number[], ancestors: Set<number>) => {
-    if (ancestors.has(id)) { warnings.add('Composition cycle omitted'); return }
-    const comp = compositions.get(id); if (!comp) return
-    const layers = layerIndices.get(comp)!, matrices = new Map<number, Matrix4>(), parents = new Map<number, Matrix4>()
+  if (scene.camera.length)
+    warnings.add(
+      'AET camera Eye translation applied (ReDIVA runtime); full camera perspective is not implemented',
+    )
+  const walk = (
+    id: number,
+    time: number,
+    base: Matrix4,
+    alpha: number,
+    path: number[],
+    ancestors: Set<number>,
+  ) => {
+    if (ancestors.has(id)) {
+      warnings.add('Composition cycle omitted')
+      return
+    }
+    const comp = compositions.get(id)
+    if (!comp) return
+    const layers = layerIndices.get(comp)!,
+      matrices = new Map<number, Matrix4>(),
+      parents = new Map<number, Matrix4>()
     let parentCycle = false
-    const localMatrix = (l: Layer) => { let matrix = matrices.get(l.offset); if (!matrix) { matrix = layerMatrix4(l, time); matrices.set(l.offset, matrix) }; return matrix }
-    const next = new Set(ancestors); next.add(id)
+    const localMatrix = (l: Layer) => {
+      let matrix = matrices.get(l.offset)
+      if (!matrix) {
+        matrix = layerMatrix4(l, time)
+        matrices.set(l.offset, matrix)
+      }
+      return matrix
+    }
+    const next = new Set(ancestors)
+    next.add(id)
     const parentMatrix = (l: Layer, seen = new Set<number>()): Matrix4 => {
       if (!l.parent) return identity4()
-      const cached = parents.get(l.offset); if (cached) return cached
-      if (seen.has(l.parent)) { parentCycle = true; warnings.add('Parent cycle omitted'); return identity4() }
-      const p = layers.get(l.parent); if (!p) return identity4()
+      const cached = parents.get(l.offset)
+      if (cached) return cached
+      if (seen.has(l.parent)) {
+        parentCycle = true
+        warnings.add('Parent cycle omitted')
+        return identity4()
+      }
+      const p = layers.get(l.parent)
+      if (!p) return identity4()
       seen.add(p.offset)
       const result = multiply4(parentMatrix(p, seen), localMatrix(p))
       if (!parentCycle) parents.set(l.offset, result)
@@ -41,32 +135,71 @@ function evaluateIndexed(scene: Scene, compositions: Map<number, Composition>, v
     }
     for (let index = comp.layers.length - 1; index >= 0; index--) {
       const l = comp.layers[index]!
-      if (hidden.has(l.offset) || (!(l.flags & 1) && !pendingMatte) || time < l.start || time >= l.end) continue
-      if (l.video?.extra) warnings.add(perspective ? 'Editor perspective approximation; full AET camera perspective not implemented' : '3D transforms use orthographic preview; full AET camera perspective not implemented')
-      if (l.itemType === 2) { warnings.add('Audio playback is not supported'); continue }
+      if (
+        hidden.has(l.offset) ||
+        (!(l.flags & 1) && !pendingMatte) ||
+        time < l.start ||
+        time >= l.end
+      )
+        continue
+      if (l.video?.extra)
+        warnings.add(
+          perspective
+            ? 'Editor perspective approximation; full AET camera perspective not implemented'
+            : '3D transforms use orthographic preview; full AET camera perspective not implemented',
+        )
+      if (l.itemType === 2) {
+        warnings.add('Audio playback is not supported')
+        continue
+      }
       const matrix = multiply4(multiply4(base, parentMatrix(l)), localMatrix(l))
-      const opacity = alpha * (l.video ? Math.max(0, Math.min(1, sampleCurve(l.video.curves.opacity, time))) : 1)
-      const local = (time - l.start) * l.timeScale + l.timeOffset, currentPath = [...path, l.offset]
+      const opacity =
+        alpha * (l.video ? Math.max(0, Math.min(1, sampleCurve(l.video.curves.opacity, time))) : 1)
+      const local = (time - l.start) * l.timeScale + l.timeOffset,
+        currentPath = [...path, l.offset]
       if (l.itemType === 3) {
-        walk(l.item, local, matrix, opacity, currentPath, next); continue
+        walk(l.item, local, matrix, opacity, currentPath, next)
+        continue
       }
       const video = videos.get(l.item)
       if (!video || (opacity <= 0 && !pendingMatte && !l.video?.matte)) continue
       // DispVideo routes source-less layers to DispSprite's runtime name map.
       // Their stored RGB is authoring metadata, not a drawable solid rectangle.
       // No runtime bindings are available in a raw editor document.
-      if (!video.sources.length) { warnings.add('Source-less video layers require game runtime sprite bindings; omitted'); continue }
-      if (video.sources.length > 1 && (l.flags & 8)) warnings.add('Sprite sequence motion blur is not applied')
+      if (!video.sources.length) {
+        warnings.add('Source-less video layers require game runtime sprite bindings; omitted')
+        continue
+      }
+      if (video.sources.length > 1 && l.flags & 8)
+        warnings.add('Sprite sequence motion blur is not applied')
       // DispVideo adds an epsilon, then converts to int32 (truncation, not floor).
       // Out-of-range source access is not emulated: omit safely instead of inventing a held frame.
       const sourceIndex = video.sources.length <= 1 ? 0 : Math.trunc(local * video.frames + 0.0001)
       const source = video.sources[sourceIndex]
-      if (video.sources.length > 1 && !source) { warnings.add(`Sprite sequence index out of range: ${l.name} (${sourceIndex})`); continue }
+      if (video.sources.length > 1 && !source) {
+        warnings.add(`Sprite sequence index out of range: ${l.name} (${sourceIndex})`)
+        continue
+      }
       const world = multiply4(view, matrix)
-      const item: DrawItem = { layer: l, path: currentPath, world, perspective, matrix: orthographicMatrix(world), opacity, video, sourceName: source?.name ?? '', sourceId: source?.id, blend: l.video?.blend ?? 3, matte: l.video?.matte ?? 0 }
+      const item: DrawItem = {
+        layer: l,
+        path: currentPath,
+        world,
+        perspective,
+        matrix: orthographicMatrix(world),
+        opacity,
+        video,
+        sourceName: source?.name ?? '',
+        sourceId: source?.id,
+        blend: l.video?.blend ?? 3,
+        matte: l.video?.matte ?? 0,
+      }
       // Runtime draws back-to-front: a matte-tagged source is retained, then masked by the next sprite.
-      if (pendingMatte) { pendingMatte.mask = item; items.push(pendingMatte); pendingMatte = undefined }
-      else if (item.matte) pendingMatte = item
+      if (pendingMatte) {
+        pendingMatte.mask = item
+        items.push(pendingMatte)
+        pendingMatte = undefined
+      } else if (item.matte) pendingMatte = item
       else items.push(item)
     }
   }
@@ -74,5 +207,13 @@ function evaluateIndexed(scene: Scene, compositions: Map<number, Composition>, v
   if (pendingMatte) warnings.add(`Unpaired track matte: ${pendingMatte.layer.name}`)
   // Filter only after pairing: selecting either side retains the complete composite,
   // including nested selections whose ID is not the first path component.
-  return { items: isolated === null ? items : items.filter(item => item.path.includes(isolated) || item.mask?.path.includes(isolated)), warnings: [...warnings] }
+  return {
+    items:
+      isolated === null
+        ? items
+        : items.filter(
+            (item) => item.path.includes(isolated) || item.mask?.path.includes(isolated),
+          ),
+    warnings: [...warnings],
+  }
 }

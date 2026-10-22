@@ -17,9 +17,15 @@ export interface PreviewInstance {
 export function createInstanceEvaluator(scene: Scene) {
   const evaluate = createSceneEvaluator(scene)
   return (instances: readonly PreviewInstance[]): Evaluation => {
-    const items: Evaluation['items'] = [], warnings = new Set<string>()
+    const items: Evaluation['items'] = [],
+      warnings = new Set<string>()
     for (const instance of instances) {
-      const result = evaluate(instance.composition, instance.frame, instance.hidden, instance.branch)
+      const result = evaluate(
+        instance.composition,
+        instance.frame,
+        instance.hidden,
+        instance.branch,
+      )
       items.push(...result.items)
       for (const warning of result.warnings) warnings.add(warning)
     }

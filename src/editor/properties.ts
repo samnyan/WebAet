@@ -1,4 +1,14 @@
-import { channels, channels3D, videoCurve, type AetDocument, type Composition, type Curve, type EditableChannel, type Layer, type Scene } from '../core/aet/types'
+import {
+  channels,
+  channels3D,
+  videoCurve,
+  type AetDocument,
+  type Composition,
+  type Curve,
+  type EditableChannel,
+  type Layer,
+  type Scene,
+} from '../core/aet/types'
 import { sampleCurve } from '../core/animation/curves'
 
 export interface LayerRef {
@@ -7,15 +17,21 @@ export interface LayerRef {
   layerId: number
 }
 
-export type PropertyRef = LayerRef & (
-  | { kind: 'channel'; channel: EditableChannel }
-  | { kind: 'layer'; field: 'name' | 'start' | 'end' | 'timeOffset' | 'timeScale' | 'parent' | 'visible' | 'locked' }
-  | { kind: 'source' }
-  | { kind: 'video'; field: 'blend' | 'matte' }
-  | { kind: 'marker'; markerOffset: number; field: 'name' | 'frame' }
-)
+export type PropertyRef = LayerRef &
+  (
+    | { kind: 'channel'; channel: EditableChannel }
+    | {
+        kind: 'layer'
+        field:
+          'name' | 'start' | 'end' | 'timeOffset' | 'timeScale' | 'parent' | 'visible' | 'locked'
+      }
+    | { kind: 'source' }
+    | { kind: 'video'; field: 'blend' | 'matte' }
+    | { kind: 'marker'; markerOffset: number; field: 'name' | 'frame' }
+  )
 
-export type PropertyGroupId = 'layer' | 'source' | 'transform' | 'transform3d' | 'appearance' | 'markers'
+export type PropertyGroupId =
+  'layer' | 'source' | 'transform' | 'transform3d' | 'appearance' | 'markers'
 
 export interface PropertyDescriptor {
   id: string
@@ -28,8 +44,7 @@ export interface PropertyDescriptor {
 }
 
 export type PropertyReadResult =
-  | { status: 'ok'; value: any }
-  | { status: 'unavailable'; reason: string }
+  { status: 'ok'; value: any } | { status: 'unavailable'; reason: string }
 
 export interface LayerContext {
   scene: Scene
@@ -58,33 +73,33 @@ export const channelLabels: Record<EditableChannel, string> = {
 
 export function resolveLayer(
   editor: { doc: { value: AetDocument | null } },
-  ref: LayerRef | null | undefined
+  ref: LayerRef | null | undefined,
 ): Layer | undefined {
   if (!ref || !editor.doc.value) return undefined
   const scene = editor.doc.value.scenes[ref.sceneIndex]
   if (!scene) return undefined
-  const comp = scene.compositions.find(c => c.offset === ref.compositionId)
+  const comp = scene.compositions.find((c) => c.offset === ref.compositionId)
   if (!comp) return undefined
-  return comp.layers.find(l => l.offset === ref.layerId)
+  return comp.layers.find((l) => l.offset === ref.layerId)
 }
 
 export function resolveLayerContext(
   editor: { doc: { value: AetDocument | null } },
-  ref: LayerRef | null | undefined
+  ref: LayerRef | null | undefined,
 ): LayerContext | undefined {
   if (!ref || !editor.doc.value) return undefined
   const scene = editor.doc.value.scenes[ref.sceneIndex]
   if (!scene) return undefined
-  const comp = scene.compositions.find(c => c.offset === ref.compositionId)
+  const comp = scene.compositions.find((c) => c.offset === ref.compositionId)
   if (!comp) return undefined
-  const layer = comp.layers.find(l => l.offset === ref.layerId)
+  const layer = comp.layers.find((l) => l.offset === ref.layerId)
   if (!layer) return undefined
   return { scene, composition: comp, layer }
 }
 
 export function resolveCurve(
   editor: { doc: { value: AetDocument | null } },
-  channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel }
+  channelRef: LayerRef & { kind: 'channel'; channel: EditableChannel },
 ): Curve | undefined {
   const layer = resolveLayer(editor, channelRef)
   if (!layer?.video) return undefined
@@ -94,7 +109,7 @@ export function resolveCurve(
 export function readProperty(
   editor: { doc: { value: AetDocument | null } },
   ref: PropertyRef,
-  frame: number
+  frame: number,
 ): PropertyReadResult {
   const layer = resolveLayer(editor, ref)
   if (!layer) return { status: 'unavailable', reason: '图层未找到' }
@@ -108,14 +123,22 @@ export function readProperty(
     }
     case 'layer': {
       switch (ref.field) {
-        case 'name': return { status: 'ok', value: layer.name }
-        case 'start': return { status: 'ok', value: layer.start }
-        case 'end': return { status: 'ok', value: layer.end }
-        case 'timeOffset': return { status: 'ok', value: layer.timeOffset }
-        case 'timeScale': return { status: 'ok', value: layer.timeScale }
-        case 'parent': return { status: 'ok', value: layer.parent }
-        case 'visible': return { status: 'ok', value: Boolean(layer.flags & 1) }
-        case 'locked': return { status: 'ok', value: Boolean(layer.flags & 32) }
+        case 'name':
+          return { status: 'ok', value: layer.name }
+        case 'start':
+          return { status: 'ok', value: layer.start }
+        case 'end':
+          return { status: 'ok', value: layer.end }
+        case 'timeOffset':
+          return { status: 'ok', value: layer.timeOffset }
+        case 'timeScale':
+          return { status: 'ok', value: layer.timeScale }
+        case 'parent':
+          return { status: 'ok', value: layer.parent }
+        case 'visible':
+          return { status: 'ok', value: Boolean(layer.flags & 1) }
+        case 'locked':
+          return { status: 'ok', value: Boolean(layer.flags & 32) }
       }
       break
     }
@@ -132,7 +155,7 @@ export function readProperty(
       break
     }
     case 'marker': {
-      const marker = layer.markers.find(m => m.offset === ref.markerOffset)
+      const marker = layer.markers.find((m) => m.offset === ref.markerOffset)
       if (!marker) return { status: 'unavailable', reason: '标记未找到' }
       if (ref.field === 'name') return { status: 'ok', value: marker.name }
       if (ref.field === 'frame') return { status: 'ok', value: marker.frame }
@@ -145,7 +168,7 @@ export function readProperty(
 export function readPropertyValue(
   editor: { doc: { value: AetDocument | null } },
   ref: PropertyRef,
-  frame: number
+  frame: number,
 ): any {
   const res = readProperty(editor, ref, frame)
   return res.status === 'ok' ? res.value : undefined
@@ -153,12 +176,16 @@ export function readPropertyValue(
 
 export function listLayerProperties(
   editor: { doc: { value: AetDocument | null } },
-  ref: LayerRef
+  ref: LayerRef,
 ): PropertyDescriptor[] {
   const layer = resolveLayer(editor, ref)
   if (!layer) return []
   const list: PropertyDescriptor[] = []
-  const baseRef = { sceneIndex: ref.sceneIndex, compositionId: ref.compositionId, layerId: ref.layerId }
+  const baseRef = {
+    sceneIndex: ref.sceneIndex,
+    compositionId: ref.compositionId,
+    layerId: ref.layerId,
+  }
 
   list.push({
     id: `${ref.layerId}:layer:name`,
@@ -166,7 +193,7 @@ export function listLayerProperties(
     group: 'layer',
     editor: 'text',
     animated: false,
-    property: { ...baseRef, kind: 'layer', field: 'name' }
+    property: { ...baseRef, kind: 'layer', field: 'name' },
   })
   list.push({
     id: `${ref.layerId}:layer:visible`,
@@ -174,7 +201,7 @@ export function listLayerProperties(
     group: 'layer',
     editor: 'boolean',
     animated: false,
-    property: { ...baseRef, kind: 'layer', field: 'visible' }
+    property: { ...baseRef, kind: 'layer', field: 'visible' },
   })
   list.push({
     id: `${ref.layerId}:layer:locked`,
@@ -182,7 +209,7 @@ export function listLayerProperties(
     group: 'layer',
     editor: 'boolean',
     animated: false,
-    property: { ...baseRef, kind: 'layer', field: 'locked' }
+    property: { ...baseRef, kind: 'layer', field: 'locked' },
   })
   list.push({
     id: `${ref.layerId}:layer:start`,
@@ -191,7 +218,7 @@ export function listLayerProperties(
     editor: 'number',
     animated: false,
     step: 1,
-    property: { ...baseRef, kind: 'layer', field: 'start' }
+    property: { ...baseRef, kind: 'layer', field: 'start' },
   })
   list.push({
     id: `${ref.layerId}:layer:end`,
@@ -200,7 +227,7 @@ export function listLayerProperties(
     editor: 'number',
     animated: false,
     step: 1,
-    property: { ...baseRef, kind: 'layer', field: 'end' }
+    property: { ...baseRef, kind: 'layer', field: 'end' },
   })
   list.push({
     id: `${ref.layerId}:layer:timeOffset`,
@@ -209,7 +236,7 @@ export function listLayerProperties(
     editor: 'number',
     animated: false,
     step: 1,
-    property: { ...baseRef, kind: 'layer', field: 'timeOffset' }
+    property: { ...baseRef, kind: 'layer', field: 'timeOffset' },
   })
   list.push({
     id: `${ref.layerId}:layer:timeScale`,
@@ -218,7 +245,7 @@ export function listLayerProperties(
     editor: 'number',
     animated: false,
     step: 0.1,
-    property: { ...baseRef, kind: 'layer', field: 'timeScale' }
+    property: { ...baseRef, kind: 'layer', field: 'timeScale' },
   })
   list.push({
     id: `${ref.layerId}:layer:parent`,
@@ -226,7 +253,7 @@ export function listLayerProperties(
     group: 'layer',
     editor: 'select',
     animated: false,
-    property: { ...baseRef, kind: 'layer', field: 'parent' }
+    property: { ...baseRef, kind: 'layer', field: 'parent' },
   })
 
   if (layer.itemType === 1 || layer.itemType === 3) {
@@ -236,7 +263,7 @@ export function listLayerProperties(
       group: 'source',
       editor: 'select',
       animated: false,
-      property: { ...baseRef, kind: 'source' }
+      property: { ...baseRef, kind: 'source' },
     })
   }
 
@@ -249,7 +276,7 @@ export function listLayerProperties(
         editor: 'number',
         animated: true,
         step: ch === 'opacity' || ch.startsWith('scale') ? 0.01 : 1,
-        property: { ...baseRef, kind: 'channel', channel: ch }
+        property: { ...baseRef, kind: 'channel', channel: ch },
       })
     }
 
@@ -263,7 +290,7 @@ export function listLayerProperties(
             editor: 'number',
             animated: true,
             step: ch === 'scaleZ' ? 0.01 : 1,
-            property: { ...baseRef, kind: 'channel', channel: ch }
+            property: { ...baseRef, kind: 'channel', channel: ch },
           })
         }
       }
@@ -275,7 +302,7 @@ export function listLayerProperties(
       group: 'appearance',
       editor: 'select',
       animated: false,
-      property: { ...baseRef, kind: 'video', field: 'blend' }
+      property: { ...baseRef, kind: 'video', field: 'blend' },
     })
     list.push({
       id: `${ref.layerId}:video:matte`,
@@ -283,7 +310,7 @@ export function listLayerProperties(
       group: 'appearance',
       editor: 'select',
       animated: false,
-      property: { ...baseRef, kind: 'video', field: 'matte' }
+      property: { ...baseRef, kind: 'video', field: 'matte' },
     })
   }
 
@@ -295,7 +322,7 @@ export function listLayerProperties(
         group: 'markers',
         editor: 'text',
         animated: false,
-        property: { ...baseRef, kind: 'marker', markerOffset: m.offset, field: 'name' }
+        property: { ...baseRef, kind: 'marker', markerOffset: m.offset, field: 'name' },
       })
       list.push({
         id: `${ref.layerId}:marker:${m.offset}:frame`,
@@ -304,7 +331,7 @@ export function listLayerProperties(
         editor: 'number',
         animated: false,
         step: 1,
-        property: { ...baseRef, kind: 'marker', markerOffset: m.offset, field: 'frame' }
+        property: { ...baseRef, kind: 'marker', markerOffset: m.offset, field: 'frame' },
       })
     }
   }
@@ -314,7 +341,7 @@ export function listLayerProperties(
 
 export function getPropertyDescriptor(
   editor: { doc: { value: AetDocument | null } },
-  ref: PropertyRef
+  ref: PropertyRef,
 ): PropertyDescriptor | undefined {
   const layer = resolveLayer(editor, ref)
   if (!layer) return undefined
@@ -334,7 +361,14 @@ export function getPropertyDescriptor(
     }
     case 'layer': {
       const step = ref.field === 'timeScale' ? 0.1 : 1
-      const editorType = ref.field === 'name' ? 'text' : (ref.field === 'visible' || ref.field === 'locked' ? 'boolean' : (ref.field === 'parent' ? 'select' : 'number'))
+      const editorType =
+        ref.field === 'name'
+          ? 'text'
+          : ref.field === 'visible' || ref.field === 'locked'
+            ? 'boolean'
+            : ref.field === 'parent'
+              ? 'select'
+              : 'number'
       const labels: Record<typeof ref.field, string> = {
         name: '名称',
         visible: '可见',
@@ -378,7 +412,10 @@ export function getPropertyDescriptor(
     case 'marker': {
       return {
         id: `${ref.layerId}:marker:${ref.markerOffset}:${ref.field}`,
-        label: ref.field === 'name' ? `标记名称 (0x${ref.markerOffset.toString(16)})` : `标记帧 (0x${ref.markerOffset.toString(16)})`,
+        label:
+          ref.field === 'name'
+            ? `标记名称 (0x${ref.markerOffset.toString(16)})`
+            : `标记帧 (0x${ref.markerOffset.toString(16)})`,
         group: 'markers',
         editor: ref.field === 'name' ? 'text' : 'number',
         animated: false,
@@ -419,12 +456,12 @@ export function getSceneOwnerIndex(scene: Scene | null | undefined, version = 0)
 export function getFullRange(
   editor: { scene: { value: Scene | null }; composition: { value: Composition | null } },
   composition?: Composition | null,
-  scene?: Scene | null
+  scene?: Scene | null,
 ): { start: number; end: number } {
   const s = scene ?? editor.scene.value
   const c = composition ?? editor.composition.value
   const layers = c?.layers ?? []
-  const start = Math.min(s?.start ?? 0, ...(layers.length ? layers.map(l => l.start) : [0]))
-  const end = Math.max(s?.end ?? 60, ...(layers.length ? layers.map(l => l.end) : [1]), 1)
+  const start = Math.min(s?.start ?? 0, ...(layers.length ? layers.map((l) => l.start) : [0]))
+  const end = Math.max(s?.end ?? 60, ...(layers.length ? layers.map((l) => l.end) : [1]), 1)
   return { start, end }
 }

@@ -66,7 +66,7 @@ export interface TimelineEditorContext {
 
 export function buildTimelineRows(
   editor: TimelineEditorContext,
-  options?: { filterAnimated?: boolean }
+  options?: { filterAnimated?: boolean },
 ): TimelineRow[] {
   const comp = editor.composition.value
   if (!comp) return []
@@ -88,7 +88,7 @@ export function buildTimelineRows(
 
     // If filterAnimated is enabled, check if layer has any animated channel (>1 keys)
     if (filterAnimated) {
-      const hasAnimated = descriptors.some(desc => {
+      const hasAnimated = descriptors.some((desc) => {
         if (!desc.animated || desc.property.kind !== 'channel') return false
         const curve = resolveCurve(editor, desc.property)
         return Boolean(curve && curve.keys.length > 1)

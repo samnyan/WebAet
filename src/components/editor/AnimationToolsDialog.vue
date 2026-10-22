@@ -15,11 +15,7 @@ import {
   NTag,
 } from 'naive-ui'
 import type { Editor } from '../../editor/state'
-import {
-  resolveCurve,
-  resolveLayer,
-  channelLabels,
-} from '../../editor/properties'
+import { resolveCurve, resolveLayer, channelLabels } from '../../editor/properties'
 import {
   copyCurve,
   canPasteCurve,
@@ -77,7 +73,7 @@ const currentLayer = computed(() => {
   return resolveLayer(e.value, activeLayerRef.value)
 })
 
-const isLayerLocked = computed(() => Boolean(currentLayer.value && (currentLayer.value.flags & 32)))
+const isLayerLocked = computed(() => Boolean(currentLayer.value && currentLayer.value.flags & 32))
 
 const channelPropertyRef = computed(() => {
   const p = activeProperty.value
@@ -112,13 +108,15 @@ const canRetimeProperty = computed(() => {
 })
 
 const canRetimeLayerScope = computed(() => {
-  return Boolean(currentLayer.value?.video && layerAnimatedTracksCount.value > 0 && !isLayerLocked.value)
+  return Boolean(
+    currentLayer.value?.video && layerAnimatedTracksCount.value > 0 && !isLayerLocked.value,
+  )
 })
 
 // Initialize state on open
 watch(
   () => props.show,
-  show => {
+  (show) => {
     if (show) {
       capturedCompId = e.value.compositionId.value
       capturedLayerId = activeLayerRef.value?.layerId ?? -1
@@ -136,17 +134,24 @@ watch(
         scope.value = 'property'
       }
     }
-  }
+  },
 )
 
 // Close dialog if active composition, layer or revision changes
 watch(
-  [() => e.value.compositionId.value, () => activeLayerRef.value?.layerId, () => e.value.version.value],
+  [
+    () => e.value.compositionId.value,
+    () => activeLayerRef.value?.layerId,
+    () => e.value.version.value,
+  ],
   ([comp, layer, rev]) => {
-    if (props.show && (comp !== capturedCompId || layer !== capturedLayerId || rev !== capturedRevision)) {
+    if (
+      props.show &&
+      (comp !== capturedCompId || layer !== capturedLayerId || rev !== capturedRevision)
+    ) {
       emit('update:show', false)
     }
-  }
+  },
 )
 
 // Retime preview summary
@@ -187,11 +192,7 @@ function handleApplyRetime() {
     if (ok) close()
   } else {
     if (!activeLayerRef.value) return
-    if (
-      !window.confirm(
-        `重定时图层全部 ${layerAnimatedTracksCount.value} 个动画轨道？可撤销。`
-      )
-    ) {
+    if (!window.confirm(`重定时图层全部 ${layerAnimatedTracksCount.value} 个动画轨道？可撤销。`)) {
       return
     }
     const ok = retimeLayer(e.value, activeLayerRef.value, timeScale.value, timeShift.value)
@@ -222,7 +223,7 @@ function handlePasteCurve() {
   if (!copied) return
   if (
     !window.confirm(
-      `替换 ${channelPropertyRef.value.channel} 曲线为剪贴板中的 ${copied.keys.length} 个关键帧？可撤销。`
+      `替换 ${channelPropertyRef.value.channel} 曲线为剪贴板中的 ${copied.keys.length} 个关键帧？可撤销。`,
     )
   ) {
     return
@@ -235,7 +236,7 @@ function handleMakeConstant() {
   if (!channelPropertyRef.value || !activeCurve.value) return
   if (
     !window.confirm(
-      `将 ${channelPropertyRef.value.channel} 的 ${activeCurve.value.keys.length} 个关键帧替换为当前帧常量？可撤销。`
+      `将 ${channelPropertyRef.value.channel} 的 ${activeCurve.value.keys.length} 个关键帧替换为当前帧常量？可撤销。`,
     )
   ) {
     return
@@ -246,7 +247,11 @@ function handleMakeConstant() {
 
 function handleRestoreCurve() {
   if (!channelPropertyRef.value) return
-  if (!window.confirm(`恢复 ${channelPropertyRef.value.channel} 到当前 AET 原始数据？仅恢复此轨道，可撤销。`)) {
+  if (
+    !window.confirm(
+      `恢复 ${channelPropertyRef.value.channel} 到当前 AET 原始数据？仅恢复此轨道，可撤销。`,
+    )
+  ) {
     return
   }
   const ok = restoreCurve(e.value, channelPropertyRef.value)
@@ -271,11 +276,7 @@ function onKeydown(ev: KeyboardEvent) {
 </script>
 
 <template>
-  <n-modal
-    :show="show"
-    transform-origin="center"
-    @update:show="emit('update:show', $event)"
-  >
+  <n-modal :show="show" transform-origin="center" @update:show="emit('update:show', $event)">
     <n-dialog
       class="editor-dialog"
       style="width: 520px; max-width: 90vw"
@@ -288,8 +289,6 @@ function onKeydown(ev: KeyboardEvent) {
       data-testid="animation-tools-dialog"
       @keydown="onKeydown"
     >
-
-
       <!-- Target Info -->
       <div class="target-info">
         <n-space align="center" size="small">
@@ -320,7 +319,11 @@ function onKeydown(ev: KeyboardEvent) {
         <span class="label">操作范围:</span>
         <n-radio-group v-model:value="scope" size="small">
           <n-radio-button value="property" :disabled="!canRetimeProperty">
-            当前属性 ({{ channelPropertyRef ? (channelLabels[channelPropertyRef.channel] || channelPropertyRef.channel) : '无' }})
+            当前属性 ({{
+              channelPropertyRef
+                ? channelLabels[channelPropertyRef.channel] || channelPropertyRef.channel
+                : '无'
+            }})
           </n-radio-button>
           <n-radio-button value="layer" :disabled="!canRetimeLayerScope">
             整层动画轨道 ({{ layerAnimatedTracksCount }} 轨)
@@ -361,16 +364,22 @@ function onKeydown(ev: KeyboardEvent) {
 
             <div v-if="retimePreview" class="preview-box">
               <template v-if="scope === 'property'">
-                <div>受影响键数: <b>{{ retimePreview.keysCount }}</b></div>
-                <div>原始时间范围: <b>{{ retimePreview.oldRange }}</b></div>
-                <div>重定时后范围: <b>{{ retimePreview.newRange }}</b></div>
+                <div>
+                  受影响键数: <b>{{ retimePreview.keysCount }}</b>
+                </div>
+                <div>
+                  原始时间范围: <b>{{ retimePreview.oldRange }}</b>
+                </div>
+                <div>
+                  重定时后范围: <b>{{ retimePreview.newRange }}</b>
+                </div>
               </template>
               <template v-else>
-                <div>整层受影响动画轨道: <b>{{ retimePreview.tracksCount }}</b> 轨</div>
+                <div>
+                  整层受影响动画轨道: <b>{{ retimePreview.tracksCount }}</b> 轨
+                </div>
               </template>
             </div>
-
-
           </div>
         </n-tab-pane>
 
@@ -391,7 +400,6 @@ function onKeydown(ev: KeyboardEvent) {
                 data-testid="dialog-value-offset"
               />
             </div>
-
           </div>
         </n-tab-pane>
 
@@ -399,10 +407,7 @@ function onKeydown(ev: KeyboardEvent) {
         <n-tab-pane name="reverse" tab="反转动画 (Reverse)">
           <div class="tab-content">
             <p class="desc">镜像反转当前属性的关键帧时间顺序，并反转切线斜率。</p>
-            <div v-if="scope === 'layer'" class="alert-hint">
-              反转仅作用于当前属性。
-            </div>
-
+            <div v-if="scope === 'layer'" class="alert-hint">反转仅作用于当前属性。</div>
           </div>
         </n-tab-pane>
 
@@ -457,35 +462,40 @@ function onKeydown(ev: KeyboardEvent) {
 
       <template #action>
         <div class="footer-row">
-              <n-button v-if="activeTab === 'reverse'"
-                type="warning"
-                size="small"
-                :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount < 2"
-                data-testid="dialog-apply-reverse"
-                @click="handleApplyReverse"
-              >
-                反转当前轨道关键帧
-              </n-button>
+          <n-button
+            v-if="activeTab === 'reverse'"
+            type="warning"
+            size="small"
+            :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount < 2"
+            data-testid="dialog-apply-reverse"
+            @click="handleApplyReverse"
+          >
+            反转当前轨道关键帧
+          </n-button>
 
-              <n-button v-if="activeTab === 'offset'"
-                type="primary"
-                size="small"
-                :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount === 0"
-                data-testid="dialog-apply-offset"
-                @click="handleApplyOffset"
-              >
-                应用数值平移
-              </n-button>
+          <n-button
+            v-if="activeTab === 'offset'"
+            type="primary"
+            size="small"
+            :disabled="isLayerLocked || !channelPropertyRef || propertyKeyCount === 0"
+            data-testid="dialog-apply-offset"
+            @click="handleApplyOffset"
+          >
+            应用数值平移
+          </n-button>
 
-              <n-button v-if="activeTab === 'retime'"
-                type="primary"
-                size="small"
-                :disabled="isLayerLocked || (scope === 'property' ? !canRetimeProperty : !canRetimeLayerScope)"
-                data-testid="dialog-apply-retime"
-                @click="handleApplyRetime"
-              >
-                应用重定时
-              </n-button>
+          <n-button
+            v-if="activeTab === 'retime'"
+            type="primary"
+            size="small"
+            :disabled="
+              isLayerLocked || (scope === 'property' ? !canRetimeProperty : !canRetimeLayerScope)
+            "
+            data-testid="dialog-apply-retime"
+            @click="handleApplyRetime"
+          >
+            应用重定时
+          </n-button>
 
           <n-button size="small" @click="close">关闭</n-button>
         </div>

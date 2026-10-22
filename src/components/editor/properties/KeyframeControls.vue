@@ -16,7 +16,7 @@ const layer = computed(() => {
   e.value.version.value
   return resolveLayer(e.value, props.property)
 })
-const isLocked = computed(() => Boolean(layer.value && (layer.value.flags & 32)))
+const isLocked = computed(() => Boolean(layer.value && layer.value.flags & 32))
 const curve = computed(() => {
   e.value.version.value
   return resolveCurve(e.value, props.property)
@@ -39,7 +39,11 @@ const canJumpNext = computed(() => {
 const activeKey = computed(() => {
   const k = e.value.workspace.activeKey.value
   if (!k) return null
-  if (k.property.layerId !== props.property.layerId || k.property.channel !== props.property.channel) return null
+  if (
+    k.property.layerId !== props.property.layerId ||
+    k.property.channel !== props.property.channel
+  )
+    return null
   return k
 })
 
@@ -47,7 +51,7 @@ const activeKeyframe = computed(() => {
   e.value.version.value
   if (!curve.value || !activeKey.value) return null
   const time = Math.fround(activeKey.value.frame)
-  return curve.value.keys.find(k => Math.fround(k.frame) === time) ?? null
+  return curve.value.keys.find((k) => Math.fround(k.frame) === time) ?? null
 })
 
 const popoverVisible = ref(false)
@@ -144,7 +148,9 @@ function onDeleteKey() {
             :value="activeKeyframe?.value"
             :disabled="isLocked"
             :show-button="false"
-            :step="property.channel === 'opacity' || property.channel.startsWith('scale') ? 0.01 : 1"
+            :step="
+              property.channel === 'opacity' || property.channel.startsWith('scale') ? 0.01 : 1
+            "
             @update:value="onSetKeyValue"
           />
         </div>

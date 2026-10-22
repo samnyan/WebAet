@@ -21,7 +21,9 @@ export function getCopiedCurve(editor?: Editor): CopiedCurveData | null {
   if (editor && clipboardDocSession !== editor.workspace.docSession.value) {
     clipboard = null
   }
-  return clipboard ? { channel: clipboard.channel, keys: clipboard.keys.map(k => ({ ...k })) } : null
+  return clipboard
+    ? { channel: clipboard.channel, keys: clipboard.keys.map((k) => ({ ...k })) }
+    : null
 }
 
 export function clearClipboard(): void {
@@ -36,7 +38,7 @@ export function copyCurve(editor: Editor, ref: PropertyRef): boolean {
 
   clipboard = {
     channel: ref.channel,
-    keys: curve.keys.map(k => ({ ...k })),
+    keys: curve.keys.map((k) => ({ ...k })),
   }
   clipboardDocSession = editor.workspace.docSession.value
   return true
@@ -48,7 +50,7 @@ export function canPasteCurve(editor: Editor, ref: PropertyRef): boolean {
   if (ref.channel !== clipboard.channel) return false
 
   const ctx = resolveLayerContext(editor, ref)
-  if (!ctx || (ctx.layer.flags & 32) || editor.busy.value) return false
+  if (!ctx || ctx.layer.flags & 32 || editor.busy.value) return false
   return true
 }
 
@@ -60,7 +62,7 @@ export function pasteCurve(editor: Editor, ref: PropertyRef): boolean {
   const curve = resolveCurve(editor, ref)
   if (!curve) return false
 
-  const keysToPaste = clipboard!.keys.map(k => ({ ...k }))
+  const keysToPaste = clipboard!.keys.map((k) => ({ ...k }))
   editor.edit(() => {
     curve.keys = keysToPaste
   })
@@ -74,7 +76,7 @@ export function restoreCurve(editor: Editor, ref: PropertyRef): boolean {
   if (editor.busy.value) return false
 
   const ctx = resolveLayerContext(editor, ref)
-  if (!ctx || (ctx.layer.flags & 32)) return false
+  if (!ctx || ctx.layer.flags & 32) return false
 
   const current = editor.doc.value
   if (!current) return false
@@ -82,8 +84,8 @@ export function restoreCurve(editor: Editor, ref: PropertyRef): boolean {
   try {
     const originalDoc = parseAet(current.source, current.name)
     const originalLayer = originalDoc.scenes[ref.sceneIndex]?.compositions
-      .flatMap(c => c.layers)
-      .find(x => x.offset === ref.layerId)
+      .flatMap((c) => c.layers)
+      .find((x) => x.offset === ref.layerId)
     const target = resolveCurve(editor, ref)
     const source = videoCurve(originalLayer?.video, ref.channel)
     if (!target || !source) {
@@ -91,7 +93,7 @@ export function restoreCurve(editor: Editor, ref: PropertyRef): boolean {
       return false
     }
 
-    const restoredKeys = source.keys.map(k => ({ ...k }))
+    const restoredKeys = source.keys.map((k) => ({ ...k }))
     editor.edit(() => {
       target.keys = restoredKeys
     })
@@ -109,7 +111,7 @@ export function makeConstant(editor: Editor, ref: PropertyRef, value?: number): 
   if (editor.busy.value) return false
 
   const ctx = resolveLayerContext(editor, ref)
-  if (!ctx || (ctx.layer.flags & 32)) return false
+  if (!ctx || ctx.layer.flags & 32) return false
 
   const curve = resolveCurve(editor, ref)
   if (!curve || curve.keys.length < 2) return false
@@ -134,7 +136,7 @@ export function reverseCurve(editor: Editor, ref: PropertyRef): boolean {
   if (editor.busy.value) return false
 
   const ctx = resolveLayerContext(editor, ref)
-  if (!ctx || (ctx.layer.flags & 32)) return false
+  if (!ctx || ctx.layer.flags & 32) return false
 
   const curve = resolveCurve(editor, ref)
   if (!curve || curve.keys.length < 2) return false
@@ -152,7 +154,7 @@ export function offsetValues(editor: Editor, ref: PropertyRef, delta: number): b
   if (editor.busy.value) return false
 
   const ctx = resolveLayerContext(editor, ref)
-  if (!ctx || (ctx.layer.flags & 32)) return false
+  if (!ctx || ctx.layer.flags & 32) return false
 
   const encodedDelta = Math.fround(delta)
   if (!Number.isFinite(encodedDelta)) {
@@ -169,13 +171,18 @@ export function offsetValues(editor: Editor, ref: PropertyRef, delta: number): b
   return true
 }
 
-export function retimeCurve(editor: Editor, ref: PropertyRef, scale: number, shift: number): boolean {
+export function retimeCurve(
+  editor: Editor,
+  ref: PropertyRef,
+  scale: number,
+  shift: number,
+): boolean {
   if (ref.kind !== 'channel') return false
   editor.workspace.requestPause()
   if (editor.busy.value) return false
 
   const ctx = resolveLayerContext(editor, ref)
-  if (!ctx || (ctx.layer.flags & 32)) return false
+  if (!ctx || ctx.layer.flags & 32) return false
 
   const encodedScale = Math.fround(scale)
   const encodedShift = Math.fround(shift)
@@ -203,7 +210,7 @@ export function retimeLayer(editor: Editor, ref: LayerRef, scale: number, shift:
   if (editor.busy.value) return false
 
   const ctx = resolveLayerContext(editor, ref)
-  if (!ctx || !ctx.layer.video || (ctx.layer.flags & 32)) return false
+  if (!ctx || !ctx.layer.video || ctx.layer.flags & 32) return false
 
   const encodedScale = Math.fround(scale)
   const encodedShift = Math.fround(shift)
