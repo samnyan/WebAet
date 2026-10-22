@@ -246,6 +246,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', keydown)
   window.removeEventListener('beforeunload', beforeUnload)
 })
+const handleStatusBarCancel = () => {
+  scanController?.abort()
+  loadController?.abort()
+}
 </script>
 <template>
   <div
@@ -413,10 +417,7 @@ onBeforeUnmount(() => {
       :editor="e"
       :warnings="allWarnings"
       :progress="progress"
-      @cancel="
-        scanController?.abort()
-        loadController?.abort()
-      "
+      @cancel="handleStatusBarCancel"
     />
   </div>
 </template>

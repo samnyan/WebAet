@@ -69,6 +69,10 @@ watch(
     if (!current && previous) record('资源任务已结束（详情见诊断）', 'info')
   },
 )
+function clearNotifications() {
+  history.value = []
+  props.editor.error.value = ''
+}
 function toggle(value: 'notifications' | 'diagnostics') {
   panel.value = panel.value === value ? null : value
 }
@@ -145,14 +149,7 @@ onBeforeUnmount(() => {
             : `诊断 / Diagnostics (${diagnostics.length})`
         }}</strong>
         <div class="spacer" />
-        <button
-          v-if="panel === 'notifications'"
-          class="status-item"
-          @click="
-            history = []
-            editor.error.value = ''
-          "
-        >
+        <button v-if="panel === 'notifications'" class="status-item" @click="clearNotifications">
           清除通知</button
         ><button class="status-item" aria-label="关闭面板" @click="panel = null">×</button>
       </header>

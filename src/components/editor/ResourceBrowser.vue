@@ -86,6 +86,10 @@ function choose(item: MaterialItem) {
   selected.value = item.key
   emit('select', item)
 }
+function activate(item: MaterialItem) {
+  choose(item)
+  emit('activate', item)
+}
 watch(
   () => p.packages.map((v) => v.key).join('\n'),
   () => {
@@ -184,14 +188,8 @@ onBeforeUnmount(() => {
                 :class="{ selected: selected === item.key }"
                 :title="item.path"
                 @click="choose(item)"
-                @dblclick="
-                  choose(item)
-                  emit('activate', item)
-                "
-                @keydown.enter.prevent="
-                  choose(item)
-                  emit('activate', item)
-                "
+                @dblclick="activate(item)"
+                @keydown.enter.prevent="activate(item)"
               >
                 <MaterialThumbnail :item="item" :library="library" :size="size" /><span>{{
                   item.set.sprites[item.index]?.name

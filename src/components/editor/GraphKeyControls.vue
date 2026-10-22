@@ -27,21 +27,21 @@ watch(
   },
   { immediate: true, flush: 'sync' },
 )
+function resetKeyDraft() {
+  if (target.value) {
+    frame.value = target.value.key.frame
+    value.value = target.value.key.value
+    tangent.value = target.value.key.tangent
+  }
+}
+
 function apply() {
   if (target.value && frame.value !== null && value.value !== null && tangent.value !== null)
     e.actions.updateKey(target.value.ref, frame.value, value.value, tangent.value)
 }
 </script>
 <template>
-  <div
-    v-if="target"
-    class="graph-key-controls"
-    @keydown.esc.stop="
-      frame = target.key.frame
-      value = target.key.value
-      tangent = target.key.tangent
-    "
-  >
+  <div v-if="target" class="graph-key-controls" @keydown.esc.stop="resetKeyDraft">
     <span>选中键</span>
     <label
       >帧<NInputNumber
