@@ -56,7 +56,11 @@ const root = ref<ResourceDirectory>(),
 const assets = computed(() =>
   root.value
     ? indexedPaths.value
-        .filter((p) => /(?:^|\/)aet_.*\.bin$/i.test(p) && !/(?:^|\/)aet_db/i.test(p))
+        .filter(
+          (p) =>
+            (/\.bin$/i.test(p) && !/(?:^|\/)(aet_db|spr_|str_|auth_|pv_)/i.test(p)) ||
+            /(?:^|\/)aet_.*\.bin$/i.test(p),
+        )
         .map((p) => ({ value: p, label: p }))
     : e.documents.value.map((d) => ({ value: d.name, label: d.name })),
 )

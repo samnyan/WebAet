@@ -25,3 +25,4 @@ dist-ssr
 
 .playwright-cli/
 .hermes/
+/private_doc

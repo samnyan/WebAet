@@ -14,12 +14,15 @@ import { translatedPosition } from './translationEditing'
 import { scaledChannels } from './scaleEditing'
 import { anchoredChannels } from './anchorEditing'
 import { parseAet } from '../core/aet/reader'
+import { parseAetAuto } from '../core/aet/dispatcher'
 import { writeAet } from '../core/aet/writer'
 import { videoCurve, type AetDocument, type EditableChannel, type Scene } from '../core/aet/types'
 import { SpriteLibrary } from '../core/resources/library'
 import { unpackFarcAsync } from '../core/resources/farcAsync'
-import { parseSpriteSet } from '../core/resources/sprites'
 import { parseSpriteDatabase } from '../core/resources/database'
+import { parseSpriteSet } from '../core/resources/sprites'
+import { isFgoSpriteTable, buildSpriteSetFromFgo } from '../core/resources/fgoSprites'
+import { parseTxp3TextureSet } from '../core/resources/txp'
 import { sampleCurve } from '../core/animation/curves'
 import { keysWithValue } from '../core/animation/setValue'
 import { getSceneOwnerIndex, resolveCurve, resolveLayer } from './properties'
@@ -294,7 +297,7 @@ export function createEditor() {
     refresh()
   }
   function open(bytes: Uint8Array, name: string) {
-    const parsed = markRaw(parseAet(bytes, name))
+    const parsed = markRaw(parseAetAuto(bytes, name))
     doc.value = parsed
     undoStack.length = 0
     redoStack.length = 0
@@ -344,10 +347,22 @@ export function createEditor() {
             ? await unpackFarcAsync(bytes, signal)
             : new Map([[file.name, bytes]])
           for (const [name, data] of entries) {
-            if (/^aet_.*\.bin$/i.test(name) && !/^aet_db/i.test(name))
+            if (
+              (/^aet_.*\.bin$/i.test(name) ||
+                (/\.bin$/i.test(name) && !/^(aet_db|spr_|str_|auth_|pv_)/i.test(name))) &&
+              !/^aet_db/i.test(name)
+            ) {
               incoming.push({ name, bytes: data })
-            else if (/^spr_db\.bin$/i.test(name)) {
+            } else if (/^spr_db\.bin$/i.test(name)) {
               library.bindDatabase(parseSpriteDatabase(data))
+              resourceVersion.value++
+            } else if (/^spr_.*_table\.bin$/i.test(name) || isFgoSpriteTable(data)) {
+              // FGO Sprite Table: store table and check if texture archive is loaded
+              const textureEntry = entries.get('texture.bin')
+              const textures = textureEntry ? parseTxp3TextureSet(textureEntry) : []
+              const set = buildSpriteSetFromFgo(name, data, textures)
+              await library.prepare(set, signal)
+              library.add(set)
               resourceVersion.value++
             } else if (/^spr_.*\.bin$/i.test(name) && !/^spr_db/i.test(name)) {
               const set = parseSpriteSet(data, name)

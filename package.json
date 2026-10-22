@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@bis-toolkit/bcn": "^1.0.2",
+    "@bokuweb/zstd-wasm": "^0.0.27",
     "@noble/ciphers": "^2.4.0",
     "fflate": "^0.8.3",
     "naive-ui": "^2.45.3",

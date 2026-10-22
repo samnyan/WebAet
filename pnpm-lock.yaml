@@ -11,6 +11,9 @@ importers:
       '@bis-toolkit/bcn':
         specifier: ^1.0.2
         version: 1.0.2
+      '@bokuweb/zstd-wasm':
+        specifier: ^0.0.27
+        version: 0.0.27
       '@noble/ciphers':
         specifier: ^2.4.0
         version: 2.4.0
@@ -85,6 +88,9 @@ packages:
 
   '@bis-toolkit/bcn@1.0.2':
     resolution: {integrity: sha512-9jLhXrCUP2RPQ/ntil6zEubNDWoFpTgWxSMCI0gEoW69F4+IwvRQiGagQbkS/JVLbLznhj0aOsFWYBxKRdAfFg==}
+
+  '@bokuweb/zstd-wasm@0.0.27':
+    resolution: {integrity: sha512-GDm2uOTK3ESjnYmSeLQifJnBsRCWajKLvN32D2ZcQaaCIJI/Hse9s74f7APXjHit95S10UImsRGkTsbwHmrtmg==}
 
   '@css-render/plugin-bem@0.15.14':
     resolution: {integrity: sha512-QK513CJ7yEQxm/P3EwsI+d+ha8kSOcjGvD6SevM41neEMxdULE+18iuQK6tEChAWMOQNQPLG/Rw3Khb69r5neg==}
@@ -811,6 +817,8 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@bis-toolkit/bcn@1.0.2': {}
+
+  '@bokuweb/zstd-wasm@0.0.27': {}
 
   '@css-render/plugin-bem@0.15.14(css-render@0.15.14)':
     dependencies:
